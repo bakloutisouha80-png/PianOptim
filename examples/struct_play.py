@@ -19,8 +19,8 @@ from bioptim import (
     PlotType,
 )
 
-from utils.pianist import Pianist
-from utils.dynamics import PianistDyanmics
+from pianoptim.utils.pianist import Pianist
+from pianoptim.utils.dynamics import PianistDyanmics
 
 
 class ZeroPosition(Enum):
@@ -45,12 +45,6 @@ def prepare_ocp(
 ) -> OptimalControlProgram:
 
     n_phases = 5
-
-    prep_phase = 0
-    down_phase = 1
-    hold_phase = 2
-    up_phase = 3
-    end_phase = 4
 
     pianist_models: list[Pianist] = []
     dynamics = DynamicsList()
@@ -194,7 +188,7 @@ def prepare_ocp(
 
 
 def main():
-    model_path = "./models/pianist.bioMod"
+    model_path = "../pianoptim/models/pianist.bioMod"
     block_trunk = False
     n_shooting = (20, 20, 50, 20, 20)
     min_phase_time = (0.05, 0.01, 0.05, 0.01, 0.05)
@@ -214,15 +208,16 @@ def main():
     ocp.add_plot_penalty(CostType.ALL)
 
     solv = Solver.IPOPT(
-        online_optim=OnlineOptim.MULTIPROCESS_SERVER,
+        # online_optim=OnlineOptim.MULTIPROCESS_SERVER,
+        online_optim=OnlineOptim.DEFAULT,
         show_options={"show_bounds": True, "automatically_organize": False},
     )
-    solv.set_maximum_iterations(500)  # TODO This should not be necessary
+    solv.set_maximum_iterations(0)  # TODO This should not be necessary
     # solv.set_linear_solver("ma57")
 
     sol = ocp.solve(solv)
     # sol.graphs()
-    sol.animate()
+    sol.animate(viewer="pyorerun")
 
 
 if __name__ == "__main__":

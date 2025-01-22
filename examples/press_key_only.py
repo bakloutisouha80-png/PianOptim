@@ -17,8 +17,8 @@ from bioptim import (
 )
 import numpy as np
 
-from utils.pianist import Pianist
-from utils.dynamics import PianistDyanmics
+from pianoptim.utils.pianist import Pianist
+from pianoptim.utils.dynamics import PianistDyanmics
 
 
 def prepare_ocp(
@@ -143,7 +143,7 @@ def prepare_ocp(
 
 
 def main():
-    model_path = "./models/pianist.bioMod"
+    model_path = "../pianoptim/models/pianist.bioMod"
     n_shooting = 40
     min_phase_time = 0.1
     max_phase_time = 0.1
@@ -164,12 +164,13 @@ def main():
             "automatically_organize": True
         },
     )
-    solv.set_maximum_iterations(500)  # TODO This should not be necessary
+    solv.set_maximum_iterations(0)  # TODO This should not be necessary
     # solv.set_linear_solver("ma57")
 
     sol = ocp.solve(solv, expand_during_shake_tree=False)
+    sol.animate(viewer="pyorerun")
     sol.graphs()
-    sol.animate()
+
 
 
 if __name__ == "__main__":
