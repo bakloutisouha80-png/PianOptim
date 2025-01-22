@@ -8,7 +8,15 @@ import numpy as np
 class Pianist(BiorbdModel):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, segments_to_apply_external_forces=["RightFingers"], **kwargs)
+        super().__init__(*args, **kwargs)
+        self.external_forces = MX.sym(
+            "external_forces_mx",
+            1, 1)
+        translational_force = vertcat(MX.zeros(1), self.external_forces[0], MX.zeros(1))
+
+        self.biorbd_external_forces_set = self.model.externalForceSet()
+        self.biorbd_external_forces_set.addTranslationalForce(translational_force, "RightFingers", MX.zeros(3))
+
 
     @property
     def trunk_dof(self) -> list[int]:
@@ -31,8 +39,8 @@ class Pianist(BiorbdModel):
         """
         q = MX.sym("q", self.nb_q, 1)
 
-        target = self.marker(q, self.marker_names.index("Key1_Top"))
-        finger = self.marker(q, self.marker_names.index("finger_marker"))
+        target = self.marker(self.marker_names.index("Key1_Top"), None)(q, self.parameters)
+        finger = self.marker(self.marker_names.index("finger_marker"), None)(q, self.parameters)
 
         s = nlpsol("sol", "ipopt", {"x": q, "g": finger - target}, {"ipopt.print_level": 0})
         return np.array(s(x0=np.zeros(self.nb_q), lbg=np.zeros(3), ubg=np.zeros(3))["x"])[:, 0]
@@ -44,8 +52,8 @@ class Pianist(BiorbdModel):
         """
         q = MX.sym("q", self.nb_q, 1)
 
-        target = self.marker(q, self.marker_names.index("key1_above"))
-        finger = self.marker(q, self.marker_names.index("finger_marker"))
+        target = self.marker(self.marker_names.index("key1_above"), None)(q, self.parameters)
+        finger = self.marker(self.marker_names.index("finger_marker"), None)(q, self.parameters)
 
         s = nlpsol("sol", "ipopt", {"x": q, "g": finger - target}, {"ipopt.print_level": 0})
         return np.array(s(x0=np.zeros(self.nb_q), lbg=np.zeros(3), ubg=np.zeros(3))["x"])[:, 0]
@@ -72,9 +80,10 @@ class Pianist(BiorbdModel):
         The position of the marker
         """
         q_sym = MX.sym("q", self.nb_q, 1)
-        marker = self.marker(q_sym, self.marker_names.index(marker_name))
+        marker = self.marker(self.marker_names.index(marker_name), None)(q_sym, self.parameters)
         if zero_name is not None:
-            zero = self.marker(q_sym, self.marker_names.index(zero_name))
+            # zero = self.marker(q_sym, self.marker_names.index(zero_name))
+            zero = self.marker(self.marker_names.index(zero_name), None)(q_sym, self.parameters)
             marker = marker - zero
         func = Function("marker", [q_sym], [marker])
         return func(q)
@@ -95,9 +104,10 @@ class Pianist(BiorbdModel):
         -------
         The external forces in the tuple[MX | SX] format
         """
-        finger = self.marker(q, self.marker_index("finger_marker"))
-        key_top = self.marker(q, self.marker_index("Key1_Top"))
-        key_bottom = self.marker(q, self.marker_index("key1_base"))
+
+        finger = self.marker(self.marker_names.index("finger_marker"), None)(q, self.parameters)
+        key_top = self.marker(self.marker_names.index("Key1_Top"), None)(q, self.parameters)
+        key_bottom = self.marker(self.marker_names.index("key1_base"), None)(q, self.parameters)
 
         finger_penetration = key_top[2] - finger[2]
         max_penetration = key_top[2] - key_bottom[2]
@@ -146,7 +156,7 @@ class Pianist(BiorbdModel):
         forces = self.compute_key_reaction_forces(q)
         forces[2] += 0.00001  # To avoid division by 0
 
-        normalized_contact = self.contact_forces(q, qdot, tau) / forces[2]
+        normalized_contact = self.contact_forces()(q, qdot, tau, forces[2], self.parameters)
         normalized_horizontal_forces_squared = normalized_contact[0] ** 2 + normalized_contact[1] ** 2
 
         # The horizontal forces are in the cone of friction if this returns [-1, 1]

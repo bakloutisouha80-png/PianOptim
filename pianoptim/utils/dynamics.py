@@ -78,7 +78,7 @@ class PianistDyanmics:
         translational_force = model.compute_key_reaction_forces(q)
 
         dq = DynamicsFunctions.compute_qdot(nlp, q, qdot)
-        ddq = model.constrained_forward_dynamics(q, qdot, tau, translational_forces=translational_force)
+        ddq = model.forward_dynamics(with_contact=True)(q, qdot, tau, translational_force[2], parameters)
 
         return DynamicsEvaluation(dxdt=vertcat(dq, ddq), defects=None)
 

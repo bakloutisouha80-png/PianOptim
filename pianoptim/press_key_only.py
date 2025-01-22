@@ -48,7 +48,7 @@ def prepare_ocp(
     u_bounds.add("tau", bounds=model.joint_torque_bounds)
 
     # Minimization to convexify the problem
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", weight=0.001)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", weight=0.001, index=[i for i in range(model.nb_tau-1)])
 
     # Some of the phases should be done as fast as possible
     if min_phase_times != max_phase_times:
@@ -158,14 +158,17 @@ def main():
     )
 
     solv = Solver.IPOPT(
-        online_optim=OnlineOptim.MULTIPROCESS_SERVER,
-        show_options={"show_bounds": False, "automatically_organize": False},
+        online_optim=OnlineOptim.DEFAULT,
+        show_options={
+            "show_bounds": True,
+            "automatically_organize": True
+        },
     )
     solv.set_maximum_iterations(500)  # TODO This should not be necessary
     # solv.set_linear_solver("ma57")
 
     sol = ocp.solve(solv, expand_during_shake_tree=False)
-    # sol.graphs()
+    sol.graphs()
     sol.animate()
 
 
