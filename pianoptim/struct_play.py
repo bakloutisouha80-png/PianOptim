@@ -28,6 +28,12 @@ class ZeroPosition(Enum):
     MARKER = auto()
 
 
+PREP_PHASE = 0
+DOWN_PHASE = 1
+HOLD_PHASE = 2
+UP_PHASE = 3
+END_PHASE = 4
+
 def prepare_ocp(
     model_path: str,
     n_shootings: tuple[int, ...],
@@ -59,7 +65,7 @@ def prepare_ocp(
         model = Pianist(model_path)
         pianist_models.append(model)
 
-        if phase in (down_phase, hold_phase, up_phase):
+        if phase in (DOWN_PHASE, HOLD_PHASE, UP_PHASE):
             dynamics.add(PianistDyanmics.configure_forward_dynamics_with_external_forces, phase=phase)
         else:
             dynamics.add(DynamicsFcn.TORQUE_DRIVEN, phase=phase)
@@ -96,27 +102,27 @@ def prepare_ocp(
     if zero_position == ZeroPosition.MARKER:
         constraints.add(
             ConstraintFcn.SUPERIMPOSE_MARKERS,
-            phase=prep_phase,
+            phase=PREP_PHASE,
             node=Node.START,
             first_marker="finger_marker",
             second_marker="Key1_Top",
         )
     elif zero_position == ZeroPosition.Q:
-        x_bounds[prep_phase]["q"][:, 0] = pianist_models[prep_phase].q_hand_on_keyboard
+        x_bounds[PREP_PHASE]["q"][:, 0] = pianist_models[PREP_PHASE].q_hand_on_keyboard
     else:
         raise ValueError("Invalid initial position")
 
     # The finger should be at the top of the key at the end of the first phase and not moving in the horizontal plane
     constraints.add(
         ConstraintFcn.SUPERIMPOSE_MARKERS,
-        phase=prep_phase,
+        phase=PREP_PHASE,
         node=Node.END,
         first_marker="finger_marker",
         second_marker="Key1_Top",
     )
     constraints.add(
         ConstraintFcn.TRACK_MARKERS_VELOCITY,
-        phase=prep_phase,
+        phase=PREP_PHASE,
         node=Node.END,
         axes=[Axis.X, Axis.Y],
         marker_index="finger_marker",
@@ -125,7 +131,7 @@ def prepare_ocp(
     # The key should be fully pressed during the hold phase
     objective_functions.add(
         ObjectiveFcn.Lagrange.SUPERIMPOSE_MARKERS,
-        phase=hold_phase,
+        phase=HOLD_PHASE,
         first_marker="finger_marker",
         second_marker="key1_base",
         axes=Axis.Z,
@@ -136,7 +142,7 @@ def prepare_ocp(
     # The key should be fully lifted at the end of the up phase (press_phase)
     constraints.add(
         ConstraintFcn.SUPERIMPOSE_MARKERS,
-        phase=up_phase,
+        phase=UP_PHASE,
         node=Node.END,
         axes=Axis.Z,
         first_marker="finger_marker",
@@ -147,13 +153,13 @@ def prepare_ocp(
     if zero_position == ZeroPosition.MARKER:
         constraints.add(
             ConstraintFcn.SUPERIMPOSE_MARKERS,
-            phase=end_phase,
+            phase=END_PHASE,
             node=Node.END,
             first_marker="finger_marker",
             second_marker="key1_above",
         )
     elif zero_position == ZeroPosition.Q:
-        x_bounds[end_phase]["q"][:, -1] = model.q_hand_above_keyboard
+        x_bounds[END_PHASE]["q"][:, -1] = model.q_hand_above_keyboard
     else:
         raise ValueError("Invalid final position")
 
