@@ -8,7 +8,7 @@ from bioptim import (
 )
 from casadi import MX, SX, vertcat, if_else
 
-from .pianist import Pianist
+from ..models.pianist import Pianist
 
 
 class PianistDyanmics:

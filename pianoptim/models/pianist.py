@@ -42,7 +42,7 @@ class Pianist(BiorbdModel):
         target = self.marker(self.marker_names.index("Key1_Top"), None)(q, self.parameters)
         finger = self.marker(self.marker_names.index("finger_marker"), None)(q, self.parameters)
 
-        s = nlpsol("sol", "ipopt", {"x": q, "g": finger - target}, {"ipopt.print_level": 0})
+        s = nlpsol("sol", "ipopt", {"x": q, "g": finger - target}, {"ipopt.hessian_approximation": "limited-memory"})
         return np.array(s(x0=np.zeros(self.nb_q), lbg=np.zeros(3), ubg=np.zeros(3))["x"])[:, 0]
 
     @cached_property
@@ -55,7 +55,7 @@ class Pianist(BiorbdModel):
         target = self.marker(self.marker_names.index("key1_above"), None)(q, self.parameters)
         finger = self.marker(self.marker_names.index("finger_marker"), None)(q, self.parameters)
 
-        s = nlpsol("sol", "ipopt", {"x": q, "g": finger - target}, {"ipopt.print_level": 0})
+        s = nlpsol("sol", "ipopt", {"x": q, "g": finger - target}, {"ipopt.hessian_approximation": "limited-memory"})
         return np.array(s(x0=np.zeros(self.nb_q), lbg=np.zeros(3), ubg=np.zeros(3))["x"])[:, 0]
 
     @property

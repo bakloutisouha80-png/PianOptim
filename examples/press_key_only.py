@@ -17,7 +17,7 @@ from bioptim import (
 )
 import numpy as np
 
-from pianoptim.utils.pianist import Pianist
+from pianoptim.models.pianist import Pianist
 from pianoptim.utils.dynamics import PianistDyanmics
 
 
@@ -48,7 +48,9 @@ def prepare_ocp(
     u_bounds.add("tau", bounds=model.joint_torque_bounds)
 
     # Minimization to convexify the problem
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", weight=0.001, index=[i for i in range(model.nb_tau-1)])
+    objective_functions.add(
+        ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", weight=0.001, index=[i for i in range(model.nb_tau - 1)]
+    )
 
     # Some of the phases should be done as fast as possible
     if min_phase_times != max_phase_times:
@@ -170,7 +172,6 @@ def main():
     sol = ocp.solve(solv, expand_during_shake_tree=False)
     sol.animate(viewer="pyorerun")
     sol.graphs()
-
 
 
 if __name__ == "__main__":

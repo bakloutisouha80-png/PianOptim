@@ -19,7 +19,7 @@ from bioptim import (
     PlotType,
 )
 
-from pianoptim.utils.pianist import Pianist
+from pianoptim.models.pianist import Pianist
 from pianoptim.utils.dynamics import PianistDyanmics
 
 
