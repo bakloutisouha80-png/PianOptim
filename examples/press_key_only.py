@@ -161,10 +161,7 @@ def main():
 
     solv = Solver.IPOPT(
         online_optim=OnlineOptim.DEFAULT,
-        show_options={
-            "show_bounds": True,
-            "automatically_organize": True
-        },
+        show_options={"show_bounds": True, "automatically_organize": True},
     )
     solv.set_maximum_iterations(0)  # TODO This should not be necessary
     # solv.set_linear_solver("ma57")

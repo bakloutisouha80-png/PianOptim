@@ -4,20 +4,12 @@ from bioptim import Bounds, HolonomicConstraintsList, HolonomicConstraintsFcn
 from casadi import MX, SX, vertcat, if_else, nlpsol, DM, Function
 import numpy as np
 
-from pianoptim.models.biorbd_model_explicit_holonomic import BiorbdModelExplicitHolonomic
+from pianoptim.models.biorbd_model_holonomic_for_collocation import HolonomicBiorbdModelForCollocation
 
 
-class HolonomicPianist(BiorbdModelExplicitHolonomic):
-
+class HolonomicPianist(HolonomicBiorbdModelForCollocation):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.external_forces = MX.sym(
-        #     "external_forces_mx",
-        #     1, 1)
-        # translational_force = vertcat(MX.zeros(1), self.external_forces[0], MX.zeros(1))
-        #
-        # self.biorbd_external_forces_set = self.model.externalForceSet()
-        # self.biorbd_external_forces_set.addTranslationalForce(translational_force, "RightFingers", MX.zeros(3))
 
         holonomic_constraints = HolonomicConstraintsList()
         # Phase 2 (Tucked phase):
@@ -33,10 +25,9 @@ class HolonomicPianist(BiorbdModelExplicitHolonomic):
 
         self.set_holonomic_configuration(
             constraints_list=holonomic_constraints,
-            independent_joint_index=sorted([3,  4,  2,  1 , 7,  8,  9, 10, 11,  0]),
-            dependent_joint_index=sorted([12,  6,  5]),
+            independent_joint_index=sorted([3, 4, 2, 1, 7, 8, 9, 10, 11, 0]),
+            dependent_joint_index=sorted([12, 6, 5]),
         )
-
 
     @property
     def trunk_dof(self) -> list[int]:
