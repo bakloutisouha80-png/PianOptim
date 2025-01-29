@@ -11,6 +11,7 @@ So this is a three-phase problem:
 from bioptim import (
     ObjectiveList,
     DynamicsList,
+    DynamicsFcn,
     BoundsList,
     InitialGuessList,
     CostType,
@@ -31,6 +32,7 @@ from bioptim import (
 from pianoptim.models.pianist_holonomic import HolonomicPianist
 from pianoptim.utils.custom_functions import (
     custom_func_track_markers,
+    custom_contraint_lambdas,
 )
 from pianoptim.utils.dynamics import (
     holonomic_torque_driven_custom_qv_init,
@@ -39,6 +41,11 @@ from pianoptim.utils.dynamics import (
 
 
 import numpy as np
+
+from pianoptim.utils.torque_derivative_holonomic_driven import (
+    configure_holonomic_torque_derivative_driven,
+    holonomic_torque_derivative_driven_custom_qv_init,
+)
 
 
 def prepare_ocp(
@@ -75,25 +82,30 @@ def prepare_ocp(
         to_second=[i for i in range(first_model.nb_q - 1)] + [None],
         to_first=[i for i in range(first_model.nb_q - 1)],
     )
+    dof_mapping.add(
+        "taudot",
+        to_second=[i for i in range(first_model.nb_q - 1)] + [None],
+        to_first=[i for i in range(first_model.nb_q - 1)],
+    )
 
     q = first_model.q_hand_on_keyboard
     qu = q[[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]]
     qv = q[[5, 6, 12]]
 
     dynamics.add(
-        configure_holonomic_torque_driven,
-        dynamic_function=holonomic_torque_driven_custom_qv_init,
+        configure_holonomic_torque_derivative_driven,
+        dynamic_function=holonomic_torque_derivative_driven_custom_qv_init,
         custom_q_v_init=qv,
         phase=0,
     )
     dynamics.add(
-        configure_holonomic_torque_driven,
+        configure_holonomic_torque_derivative_driven,
         dynamic_function=holonomic_torque_driven_custom_qv_init,
         custom_q_v_init=qv,
         phase=1,
     )
     dynamics.add(
-        configure_holonomic_torque_driven,
+        configure_holonomic_torque_derivative_driven,
         dynamic_function=holonomic_torque_driven_custom_qv_init,
         custom_q_v_init=qv,
         phase=2,
@@ -114,22 +126,37 @@ def prepare_ocp(
     x_init.add("qdot_u", [0] * (models[1].nb_q - 3), phase=1)
     x_init.add("qdot_u", [0] * (models[2].nb_q - 3), phase=2)
 
-    u_bounds.add("tau", min_bound=[-40] * (models[0].nb_tau - 1), max_bound=[40] * (models[0].nb_tau - 1), phase=0)
-    u_bounds.add("tau", min_bound=[-40] * (models[1].nb_tau - 1), max_bound=[40] * (models[1].nb_tau - 1), phase=1)
-    u_bounds.add("tau", min_bound=[-40] * (models[2].nb_tau - 1), max_bound=[40] * (models[2].nb_tau - 1), phase=2)
+    x_bounds.add("tau", min_bound=[-40] * (models[0].nb_tau - 1), max_bound=[40] * (models[0].nb_tau - 1), phase=0)
+    x_bounds.add("tau", min_bound=[-40] * (models[1].nb_tau - 1), max_bound=[40] * (models[1].nb_tau - 1), phase=1)
+    x_bounds.add("tau", min_bound=[-40] * (models[2].nb_tau - 1), max_bound=[40] * (models[2].nb_tau - 1), phase=2)
 
-    u_init.add("tau", [0] * (models[0].nb_tau - 1), phase=0)
-    u_init.add("tau", [0] * (models[1].nb_tau - 1), phase=1)
-    u_init.add("tau", [0] * (models[2].nb_tau - 1), phase=2)
+    x_init.add("tau", [0] * (models[0].nb_tau - 1), phase=0)
+    x_init.add("tau", [0] * (models[1].nb_tau - 1), phase=1)
+    x_init.add("tau", [0] * (models[2].nb_tau - 1), phase=2)
 
-    # Minimization to convexify the problem
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", phase=0, weight=1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", phase=1, weight=1)
+    u_bounds.add(
+        "taudot", min_bound=[-10000] * (models[0].nb_tau - 1), max_bound=[10000] * (models[0].nb_tau - 1), phase=0
+    )
+    u_bounds.add(
+        "taudot", min_bound=[-10000] * (models[1].nb_tau - 1), max_bound=[10000] * (models[1].nb_tau - 1), phase=1
+    )
+    u_bounds.add(
+        "taudot", min_bound=[-10000] * (models[2].nb_tau - 1), max_bound=[10000] * (models[2].nb_tau - 1), phase=2
+    )
+
+    u_init.add("taudot", [0] * (models[0].nb_tau - 1), phase=0)
+    u_init.add("taudot", [0] * (models[1].nb_tau - 1), phase=1)
+    u_init.add("taudot", [0] * (models[2].nb_tau - 1), phase=2)
+
+    # Objective Functions
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=1, weight=0.001)
-    # objective_functions.add(
-    #     ObjectiveFcn.Lagrange.MINIMIZE_MARKERS_VELOCITY, marker_index="contact_finger", phase=1, weight=0.001
-    # )
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="tau", phase=2, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
+
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
 
     # The first and last frames are at rest
     x_bounds[0]["qdot_u"][:, 0] = 0
@@ -147,6 +174,25 @@ def prepare_ocp(
         target=START_POSE,
         custom_qv_init=qv,
     )
+    for i in range(0, 3):
+        constraints.add(
+            custom_contraint_lambdas,
+            phase=i,
+            node=Node.ALL,
+            custom_qv_init=qv,
+            min_bound=[-20, -20, -20],
+            max_bound=[20, 20, 20],
+        )
+
+    constraints.add(
+        custom_func_track_markers,
+        phase=0,
+        node=Node.INTERMEDIATES,
+        marker="contact_finger",
+        custom_qv_init=qv,
+        min_bound=BED_POSE,
+        max_bound=START_POSE,
+    )
 
     constraints.add(
         custom_func_track_markers,
@@ -155,6 +201,16 @@ def prepare_ocp(
         marker="contact_finger",
         target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
         custom_qv_init=qv,
+    )
+
+    constraints.add(
+        custom_func_track_markers,
+        phase=2,
+        node=Node.ALL_SHOOTING,
+        marker="contact_finger",
+        custom_qv_init=qv,
+        min_bound=BED_POSE,
+        max_bound=START_POSE,
     )
 
     constraints.add(
@@ -177,6 +233,7 @@ def prepare_ocp(
         x_bounds=x_bounds,
         u_bounds=u_bounds,
         x_init=x_init,
+        u_init=u_init,
         objective_functions=objective_functions,
         constraints=constraints,
         ode_solver=ode_solver,
@@ -204,9 +261,9 @@ def main():
     n_shooting = (20, 20, 20)
     min_phase_time = (0.05, 0.05, 0.05)
     max_phase_time = (0.10, 0.10, 0.10)
-    # ode_solver = OdeSolver.RK1(n_integration_steps=5)
+    ode_solver = OdeSolver.RK2(n_integration_steps=5)
     # ode_solver = OdeSolver.RK4(n_integration_steps=5)
-    ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
+    # ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
     #
     ocp, qv = prepare_ocp(
         model_path=model_path,
@@ -219,8 +276,8 @@ def main():
 
     solv = Solver.IPOPT(
         # online_optim=OnlineOptim.MULTIPROCESS_SERVER,
-        # online_optim=OnlineOptim.DEFAULT,
-        # show_options={"show_bounds": True, "automatically_organize": False},
+        online_optim=OnlineOptim.DEFAULT,
+        show_options={"show_bounds": True, "automatically_organize": False},
     )
     solv.set_maximum_iterations(500)
     solv.set_linear_solver("ma57")

@@ -1,8 +1,10 @@
+from typing import Any
+
 import numpy as np
 
 from bioptim import PenaltyController, ControlType, DynamicsFunctions
 from bioptim.limits.penalty import PenaltyFunctionAbstract
-from casadi import horzcat, DM
+from casadi import horzcat, DM, vertcat, MX
 
 
 def custom_func_track_markers(
@@ -115,3 +117,59 @@ def constraint_qv_init(
     qv_start = controllers[1].controls["q_v_init"].mapping.to_second.map(controllers[1].controls["q_v_init"].cx)
 
     return qv_end - qv_start
+
+
+def custom_contraint_lambdas(controller: PenaltyController, custom_qv_init: np.ndarray = None) -> MX:
+    """The model can only pull on the legs, not push"""
+    # Recuperer les q
+    q_u = controller.states["q_u"].cx
+    qdot_u = controller.states["qdot_u"].cx
+
+    tau = controller.controls["tau"] if "tau" in controller.controls else controller.states["tau"]
+    tau_complete = tau.mapping.to_second.map(tau.cx)
+
+    # Calculer lambdas
+    lambdas = controller.model.compute_the_lagrangian_multipliers()(q_u, qdot_u, custom_qv_init, tau_complete)
+
+    return lambdas
+
+
+def custom_contraint_lambdas_shear(controller: PenaltyController, bio_model: Any) -> MX:
+    """
+    Relaxed friction cone, the model can push a little bit
+    lagrange_1**2 < lagrange_0**2
+    """
+    q_u = controller.states["q_u"].cx
+    qdot_u = controller.states["qdot_u"].cx
+    tau = controller.controls["tau"].cx if "tau" in controller.controls else controller.states["tau"].cx
+    pelvis_mx = MX.zeros(3)
+    new_tau = vertcat(pelvis_mx, tau)
+
+    # Calculer lambdas
+    lambdas = bio_model.compute_the_lagrangian_multipliers(q_u, qdot_u, new_tau)
+    lagrange_0 = lambdas[0]
+    lagrange_1 = lambdas[1]
+
+    return lagrange_0**2 - lagrange_1**2
+
+
+# def add_constraint_tucking_friction_cone(biomodel_holonomic, constraints):
+#     # "relaxed friction cone"
+#     constraints.add(
+#         custom_contraint_lambdas_shear,
+#         node=Node.ALL_SHOOTING,
+#         bio_model=biomodel_holonomic,
+#         max_bound=np.inf,
+#         min_bound=0,
+#         phase=2,
+#     )
+#     # The model can only pull on the legs, not push
+#     constraints.add(
+#         custom_contraint_lambdas_normal,
+#         node=Node.ALL_SHOOTING,
+#         bio_model=biomodel_holonomic,
+#         max_bound=-0.1,
+#         min_bound=-np.inf,
+#         phase=2,
+#     )
+#     return constraints
