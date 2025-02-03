@@ -32,6 +32,7 @@ from bioptim import (
 from pianoptim.models.pianist_holonomic import HolonomicPianist
 from pianoptim.utils.custom_functions import (
     custom_func_track_markers,
+    custom_func_track_markers_velocity,
     custom_contraint_lambdas,
 )
 from pianoptim.utils.dynamics import (
@@ -149,18 +150,33 @@ def prepare_ocp(
     u_init.add("taudot", [0] * (models[2].nb_tau - 1), phase=2)
 
     # Objective Functions
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
+    #objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
+    #objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=1, weight=0.001)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
+    #objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
 
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=0, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=1, weight=1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=2, weight=1)
+
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=0.1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=0.1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=0.1)
+
+    for p in range(3):
+        objective_functions.add(
+            custom_contraint_lambdas,
+            custom_type=ObjectiveFcn.Lagrange,
+            index=[2],
+            phase=p,
+            weight=0.1,
+            custom_qv_init=qv,
+        )
 
     # The first and last frames are at rest
     x_bounds[0]["qdot_u"][:, 0] = 0
-    x_bounds[-1]["qdot_u"][:, -1] = 0
+    x_bounds[-1]["qdot_u"].min[:, -1] = -0.01
+    x_bounds[-1]["qdot_u"].max[:, -1] = 0.01
 
     # Start and end with the finger on the key at top position without any velocity
     START_POSE = np.array([[-0.16104043, -0.5356114, 0.124]]).T
@@ -194,13 +210,36 @@ def prepare_ocp(
         max_bound=START_POSE,
     )
 
+    slack = np.array([(0.001, 0.001, 0.001)]).T
     constraints.add(
         custom_func_track_markers,
         phase=1,
+        node=Node.START,
+        marker="contact_finger",
+        # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
+        target=BED_POSE,
+        custom_qv_init=qv,
+        # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
+        # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
+    )
+    constraints.add(
+        custom_func_track_markers_velocity,
+        phase=1,
         node=Node.ALL,
         marker="contact_finger",
-        target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
         custom_qv_init=qv,
+    )
+
+    constraints.add(
+        custom_func_track_markers,
+        phase=1,
+        node=Node.END,
+        marker="contact_finger",
+        # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
+        target=BED_POSE,
+        custom_qv_init=qv,
+        # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
+        # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
     )
 
     constraints.add(
@@ -238,20 +277,20 @@ def prepare_ocp(
         constraints=constraints,
         ode_solver=ode_solver,
         use_sx=False,
-        n_threads=8,
+        n_threads=32,
         variable_mappings=dof_mapping,
     )
 
-    # Add a graph that shows the finger height
-    for i in range(3):
-        ocp.add_plot(
-            "Finger height",
-            lambda t0, phases_dt, node_idx, x, u, p, a, d: models[i].compute_marker_from_dm(
-                x[: models[i].nb_q], "contact_finger"
-            )[2, :],
-            phase=i,
-            plot_type=PlotType.INTEGRATED,
-        )
+    # # Add a graph that shows the finger height
+    # for i in range(3):
+    #     ocp.add_plot(
+    #         "Finger height",
+    #         lambda t0, phases_dt, node_idx, x, u, p, a, d: models[i].compute_marker_from_dm(
+    #             x[: models[i].nb_q], "contact_finger"
+    #         )[2, :],
+    #         phase=i,
+    #         plot_type=PlotType.INTEGRATED,
+    #     )
 
     return ocp, qv
 
@@ -261,9 +300,9 @@ def main():
     n_shooting = (20, 20, 20)
     min_phase_time = (0.05, 0.05, 0.05)
     max_phase_time = (0.10, 0.10, 0.10)
-    ode_solver = OdeSolver.RK2(n_integration_steps=5)
+    # ode_solver = OdeSolver.RK2(n_integration_steps=5)
     # ode_solver = OdeSolver.RK4(n_integration_steps=5)
-    # ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
+    ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
     #
     ocp, qv = prepare_ocp(
         model_path=model_path,
@@ -276,10 +315,10 @@ def main():
 
     solv = Solver.IPOPT(
         # online_optim=OnlineOptim.MULTIPROCESS_SERVER,
-        online_optim=OnlineOptim.DEFAULT,
-        show_options={"show_bounds": True, "automatically_organize": False},
+        # online_optim=OnlineOptim.DEFAULT,
+        # show_options={"show_bounds": True, "automatically_organize": False},
     )
-    solv.set_maximum_iterations(500)
+    solv.set_maximum_iterations(5000)
     solv.set_linear_solver("ma57")
     sol = ocp.solve(solv)
 
@@ -307,8 +346,12 @@ def main():
     mprr.add_animated_model(pyomodel, q[2], phase=2)
 
     mprr.rerun()
+    sol.print_cost()
 
-    sol.graphs(show_bounds=True)
+    import datetime
+    date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+    sol.graphs(show_bounds=True, save_name=f"../results/press_play_torque_derivative_driven_{date}.png")
 
 
 if __name__ == "__main__":
