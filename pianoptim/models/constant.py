@@ -1,9 +1,6 @@
 import numpy as np
-from pyorerun import LiveModelAnimation
 
-model_path = "pianist_and_key.bioMod"
-lma = LiveModelAnimation(model_path)
-q = np.array(
+FINGER_TIP_ON_KEY = np.array(
     [
         [1.97934754e-05, -1.29272413e-02],
         [1.47896009e-05, 7.98615516e-02],
@@ -20,5 +17,6 @@ q = np.array(
         [0.00000000e00, 0.00000000e00],
     ]
 )
-lma.q = q[:, 0]
-lma.rerun("the_pianist")
+
+FINGER_TIP_ON_KEY_RELAXED = FINGER_TIP_ON_KEY[:, 0]
+FINGER_TIP_ON_KEY_PREPUSHED = FINGER_TIP_ON_KEY[:, 1]
