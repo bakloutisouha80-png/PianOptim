@@ -39,6 +39,40 @@ def custom_func_track_markers(
     return diff_markers[axes]
 
 
+def custom_func_track_markers_velocity(
+    controller: PenaltyController,
+    marker: str | int,
+    axes: list[int] = [0, 1, 2],
+    custom_qv_init: np.ndarray = None,
+):
+    """
+    Minimize the distance between two markers
+    By default this function is quadratic, meaning that it minimizes distance between them.
+
+    Parameters
+    ----------
+    controller: PenaltyController
+        The penalty node elements
+    marker: str | int
+        The name or index of the marker
+    axes: list[int]
+        The axes to track
+    """
+
+    first_marker_idx = controller.model.marker_index(marker) if isinstance(marker, str) else marker
+    PenaltyFunctionAbstract._check_idx("marker", [first_marker_idx], controller.model.nb_markers)
+
+    qu = controller.states["q_u"].mapping.to_second.map(controller.states["q_u"].cx)
+    qdotu = controller.states["qdot_u"].mapping.to_second.map(controller.states["qdot_u"].cx)
+    qv_init = DM.zeros(controller.model.nb_dependent_joints) if custom_qv_init is None else DM(custom_qv_init)
+    q = controller.model.compute_q()(qu, qv_init)
+    qdot = controller.model.compute_qdot()(q, qdotu)
+
+    marker_vel = controller.model.marker_velocity(first_marker_idx)(q, qdot, controller.parameters.cx)
+
+    return marker_vel[axes]
+
+
 def custom_func_superimpose_markers(
     controller: PenaltyController,
     first_marker: str | int,
