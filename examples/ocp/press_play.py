@@ -200,7 +200,7 @@ def prepare_ocp(
 
 
 def main():
-    model_path = "../pianoptim/models/pianist_and_key.bioMod"
+    model_path = "../../pianoptim/models/pianist_and_key.bioMod"
     n_shooting = (20, 20, 20)
     min_phase_time = (0.05, 0.05, 0.05)
     max_phase_time = (0.10, 0.10, 0.10)
