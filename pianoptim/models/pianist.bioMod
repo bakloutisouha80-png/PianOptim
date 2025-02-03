@@ -272,6 +272,11 @@ contact contact_finger
     axis xy  // Specifying the axis for the contact point
 endcontact
 
+marker contact_finger
+    parent RightFingers
+    position 0.0015 0.0015 -0.046782999938
+endmarker
+
 // Marker for the MCP
 marker MCP_marker
     parent RightFingers
@@ -285,12 +290,12 @@ segment square
     parent ground
     // These mesh coordinates define the first key's position and dimensions
 
-    mesh -0.17254042053222657    -0.5356114196777344  0.124
-    mesh -0.17254042053222657    -0.5356114196777344  0.124-0.01
-    mesh -0.17254042053222657    -0.5356114196777344  0.124-0.01
-    mesh -0.14954042053222655    -0.5356114196777344  0.124-0.01
-    mesh -0.14954042053222655    -0.5356114196777344  0.124-0.01
-    mesh -0.14954042053222655    -0.5356114196777344  0.124
+    mesh -0.1965    -0.4756114196777344  0.184
+    mesh -0.1965    -0.4756114196777344  0.184-0.01
+    mesh -0.1965    -0.4756114196777344  0.184-0.01
+    mesh -0.1735    -0.4756114196777344  0.184-0.01
+    mesh -0.1735    -0.4756114196777344  0.184-0.01
+    mesh -0.1735    -0.4756114196777344  0.184
 
 endsegment
 
@@ -298,12 +303,12 @@ endsegment
 segment square2
     parent ground
     // Similar to Key 1, these mesh coordinates define the position and dimensions of the second key
-    mesh -0.31754042053222653 -0.5356114196777344 0.124
-    mesh -0.31754042053222653 -0.5356114196777344 0.124-0.01
-    mesh -0.31754042053222653 -0.5356114196777344 0.124-0.01
-    mesh -0.34054042053222655 -0.5356114196777344 0.124-0.01
-    mesh -0.34054042053222655 -0.5356114196777344 0.124-0.01
-    mesh -0.34054042053222655 -0.5356114196777344 0.124
+    mesh -0.34149999999999997 -0.4756114196777344 0.184
+    mesh -0.34149999999999997 -0.4756114196777344 0.184-0.01
+    mesh -0.34149999999999997 -0.4756114196777344 0.184-0.01
+    mesh -0.3645 -0.4756114196777344 0.184-0.01
+    mesh -0.3645 -0.4756114196777344 0.184-0.01
+    mesh -0.3645 -0.4756114196777344 0.184
 endsegment
 
 // Marker Configuration for Simulating Piano Key Presses //
@@ -311,34 +316,34 @@ endsegment
 // Marker for the top surface of Key 1
 marker Key1_Top
     parent ground
-    position -0.16104042053222656 -0.5356114196777344 0.124
+    position -0.185 -0.4756114196777344 0.184
 endmarker
 
 // Marker for simulating the upward motion of a key (12 cm above)
 marker key1_above
     parent ground
-    position -0.16104042053222656 -0.5356114196777344 0.24
+    position -0.185 -0.4756114196777344 0.30
     // Positioned to simulate the upward phase of a key press
 endmarker
 
 // Marker for the lower surface of Key 1
 marker key1_base
     parent ground
-    position -0.16104042053222656 -0.5356114196777344 0.124-0.01
+    position -0.185 -0.4756114196777344 0.184-0.01
     // Represents the lower surface of the first key, indicating a pressed state
 endmarker
 
 // Marker for the top surface of Key 2
 marker Key2_Top
     parent ground
-    position -0.3290404205322266 -0.5356114196777344 0.124
+    position -0.35300000000000004 -0.4756114196777344 0.184
     // This marker is for the upper surface of the second piano key
 endmarker
 
 // Marker for the lower surface of Key 2
 marker Key2_base
     parent ground
-    position -0.3290404205322266 -0.5356114196777344 0.124-0.01
+    position -0.35300000000000004 -0.4756114196777344 0.184-0.01
     // Indicates the pressed state (Key descend, not pressed or struck touch) of the second key
 endmarker
 
