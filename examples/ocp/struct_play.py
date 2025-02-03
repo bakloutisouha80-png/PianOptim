@@ -34,6 +34,7 @@ HOLD_PHASE = 2
 UP_PHASE = 3
 END_PHASE = 4
 
+
 def prepare_ocp(
     model_path: str,
     n_shootings: tuple[int, ...],

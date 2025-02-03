@@ -150,10 +150,10 @@ def prepare_ocp(
     u_init.add("taudot", [0] * (models[2].nb_tau - 1), phase=2)
 
     # Objective Functions
-    #objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
-    #objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
+    # objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=1)
+    # objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=1)
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=1, weight=0.001)
-    #objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
+    # objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=1)
 
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=0, weight=1)
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=1, weight=1)
@@ -349,6 +349,7 @@ def main():
     sol.print_cost()
 
     import datetime
+
     date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     sol.graphs(show_bounds=True, save_name=f"../results/press_play_torque_derivative_driven_{date}.png")

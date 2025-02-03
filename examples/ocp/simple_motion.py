@@ -28,6 +28,7 @@ class ZeroPosition(Enum):
 
 PREP_PHASE = 0
 
+
 def prepare_ocp(
     model_path: str,
     n_shootings: tuple[int, ...],
@@ -145,9 +146,9 @@ def prepare_ocp(
 def main():
     model_path = "../../pianoptim/models/pianist.bioMod"
     block_trunk = False
-    n_shooting = 20,
-    min_phase_time = 0.05,
-    max_phase_time = 0.10,
+    n_shooting = (20,)
+    min_phase_time = (0.05,)
+    max_phase_time = (0.10,)
     zero_position = ZeroPosition.MARKER
     ode_solver = OdeSolver.RK2(n_integration_steps=5)
 
@@ -173,6 +174,7 @@ def main():
 
     sol.graphs(show_bounds=True)
     sol.animate(viewer="pyorerun")
+
 
 if __name__ == "__main__":
     main()
