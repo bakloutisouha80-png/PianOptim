@@ -32,17 +32,14 @@ from pianoptim.utils.custom_functions import (
     custom_func_track_markers_velocity,
     custom_contraint_lambdas,
 )
-from pianoptim.utils.dynamics import (
-    holonomic_torque_driven_custom_qv_init,
-    configure_holonomic_torque_driven,
-)
-
 
 import numpy as np
 
 from pianoptim.utils.torque_derivative_holonomic_driven import (
-    configure_holonomic_torque_derivative_driven,
-    holonomic_torque_derivative_driven_custom_qv_init,
+    configure_holonomic_torque_derivative_driven_with_qv,
+    holonomic_torque_derivative_driven_with_qv,
+    constraint_holonomic,
+    constraint_holonomic_end,
 )
 
 
@@ -57,6 +54,8 @@ def prepare_ocp(
     dynamics = DynamicsList()
     x_bounds = BoundsList()
     x_init = InitialGuessList()
+    a_bounds = BoundsList()
+    a_init = InitialGuessList()
     u_bounds = BoundsList()
     u_init = InitialGuessList()
     objective_functions = ObjectiveList()
@@ -70,12 +69,17 @@ def prepare_ocp(
     )
     first_model = models[0]
 
-    variable_bimapping = BiMappingList()
-    variable_bimapping.add(
-        "q", to_second=[0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9], to_first=[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
+    u_variable_bimapping = BiMappingList()
+    u_variable_bimapping.add(
+        "q", to_second=[0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9, None], to_first=[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
     )
-    variable_bimapping.add(
-        "qdot", to_second=[0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9], to_first=[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
+    u_variable_bimapping.add(
+        "qdot", to_second=[0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9, None], to_first=[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
+    )
+
+    v_variable_bimapping = BiMappingList()
+    v_variable_bimapping.add(
+        "q", to_second=[None, None, None, None, None, 0, 1, None, None, None, None, None, 3], to_first=[5, 6, 12]
     )
 
     dof_mapping = BiMappingList()
@@ -94,31 +98,35 @@ def prepare_ocp(
     qu = q[[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]]
     qv = q[[5, 6, 12]]
 
-    dynamics.add(
-        configure_holonomic_torque_derivative_driven,
-        dynamic_function=holonomic_torque_derivative_driven_custom_qv_init,
-        custom_q_v_init=qv,
-        phase=0,
-    )
-    dynamics.add(
-        configure_holonomic_torque_derivative_driven,
-        dynamic_function=holonomic_torque_driven_custom_qv_init,
-        custom_q_v_init=qv,
-        phase=1,
-    )
-    dynamics.add(
-        configure_holonomic_torque_derivative_driven,
-        dynamic_function=holonomic_torque_driven_custom_qv_init,
-        custom_q_v_init=qv,
-        phase=2,
-    )
+    for i in range(3):
+        dynamics.add(
+            configure_holonomic_torque_derivative_driven_with_qv,
+            dynamic_function=holonomic_torque_derivative_driven_with_qv,
+            custom_q_v_init=qv,
+            phase=i,
+        )
+        # Path Constraints
+        constraints.add(
+            constraint_holonomic,
+            node=Node.ALL_SHOOTING,
+            phase=i,
+        )
+        constraints.add(
+            constraint_holonomic_end,
+            node=Node.END,
+            phase=i,
+        )
 
-    x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", variable_bimapping), phase=0)
-    x_bounds.add("qdot_u", bounds=models[0].bounds_from_ranges("qdot", variable_bimapping), phase=0)
-    x_bounds.add("q_u", bounds=models[1].bounds_from_ranges("q", variable_bimapping), phase=1)
-    x_bounds.add("qdot_u", bounds=models[1].bounds_from_ranges("qdot", variable_bimapping), phase=1)
-    x_bounds.add("q_u", bounds=models[2].bounds_from_ranges("q", variable_bimapping), phase=2)
-    x_bounds.add("qdot_u", bounds=models[2].bounds_from_ranges("qdot", variable_bimapping), phase=2)
+    x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", u_variable_bimapping), phase=0)
+    x_bounds.add("qdot_u", bounds=models[0].bounds_from_ranges("qdot", u_variable_bimapping), phase=0)
+    x_bounds.add("q_u", bounds=models[1].bounds_from_ranges("q", u_variable_bimapping), phase=1)
+    x_bounds.add("qdot_u", bounds=models[1].bounds_from_ranges("qdot", u_variable_bimapping), phase=1)
+    x_bounds.add("q_u", bounds=models[2].bounds_from_ranges("q", u_variable_bimapping), phase=2)
+    x_bounds.add("qdot_u", bounds=models[2].bounds_from_ranges("qdot", u_variable_bimapping), phase=2)
+
+    a_bounds.add("q_v", bounds=models[0].bounds_from_ranges("q", v_variable_bimapping), phase=0)
+    a_bounds.add("q_v", bounds=models[1].bounds_from_ranges("q", v_variable_bimapping), phase=1)
+    a_bounds.add("q_v", bounds=models[2].bounds_from_ranges("q", v_variable_bimapping), phase=2)
 
     x_init.add("q_u", qu, phase=0)
     x_init.add("q_u", qu, phase=1)
@@ -127,6 +135,10 @@ def prepare_ocp(
     x_init.add("qdot_u", [0] * (models[0].nb_q - 3), phase=0)
     x_init.add("qdot_u", [0] * (models[1].nb_q - 3), phase=1)
     x_init.add("qdot_u", [0] * (models[2].nb_q - 3), phase=2)
+
+    a_init.add("q_v", qv, phase=0)
+    a_init.add("q_v", qv, phase=1)
+    a_init.add("q_v", qv, phase=2)
 
     x_bounds.add("tau", min_bound=[-40] * (models[0].nb_tau - 1), max_bound=[40] * (models[0].nb_tau - 1), phase=0)
     x_bounds.add("tau", min_bound=[-40] * (models[1].nb_tau - 1), max_bound=[40] * (models[1].nb_tau - 1), phase=1)
@@ -268,8 +280,10 @@ def prepare_ocp(
         phase_time=phase_times,
         x_bounds=x_bounds,
         u_bounds=u_bounds,
+        a_bounds=a_bounds,
         x_init=x_init,
         u_init=u_init,
+        a_init=a_init,
         objective_functions=objective_functions,
         constraints=constraints,
         ode_solver=ode_solver,

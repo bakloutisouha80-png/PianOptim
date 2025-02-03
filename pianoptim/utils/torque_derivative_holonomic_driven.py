@@ -8,6 +8,7 @@ from bioptim import (
     BiMapping,
     CustomPlot,
     PlotType,
+    PenaltyController,
 )
 from casadi import MX, vertcat, Function
 import numpy as np
@@ -71,6 +72,75 @@ def configure_holonomic_torque_derivative_driven(
     ConfigureProblem.configure_dynamics_function(
         ocp, nlp, holonomic_torque_derivative_driven_custom_qv_init, custom_q_v_init=custom_q_v_init
     )
+
+
+def configure_holonomic_torque_derivative_driven_with_qv(
+    ocp, nlp, numerical_data_timeseries: dict[str, np.ndarray] = None, custom_q_v_init: np.ndarray = None
+):
+    """
+    Tell the program which variables are states and controls.
+
+    Parameters
+    ----------
+    ocp: OptimalControlProgram
+        A reference to the ocp
+    nlp: NonLinearProgram
+        A reference to the phase
+    """
+
+    name = "q_u"
+    names_u = [nlp.model.name_dof[i] for i in nlp.model.independent_joint_index]
+    ConfigureProblem.configure_new_variable(
+        name,
+        names_u,
+        ocp,
+        nlp,
+        True,
+        False,
+        False,
+        # NOTE: not ready for phase mapping yet as it is based on dofnames of the class BioModel
+        # see _set_kinematic_phase_mapping method
+        # axes_idx=ConfigureProblem._apply_phase_mapping(ocp, nlp, name),
+    )
+    name = "q_v"
+    names_v = [nlp.model.name_dof[i] for i in nlp.model.dependent_joint_index]
+    ConfigureProblem.configure_new_variable(
+        name,
+        names_v,
+        ocp,
+        nlp,
+        False,
+        False,
+        False,
+        as_algebraic_states=True,
+    )
+
+    name = "qdot_u"
+    names_qdot = ConfigureProblem._get_kinematics_based_names(nlp, "qdot")
+    names_udot = [names_qdot[i] for i in nlp.model.independent_joint_index]
+    ConfigureProblem.configure_new_variable(
+        name,
+        names_udot,
+        ocp,
+        nlp,
+        True,
+        False,
+        False,
+        # NOTE: not ready for phase mapping yet as it is based on dofnames of the class BioModel
+        # see _set_kinematic_phase_mapping method
+        # axes_idx=ConfigureProblem._apply_phase_mapping(ocp, nlp, name),
+    )
+
+    ConfigureProblem.configure_tau(ocp, nlp, as_states=True, as_controls=False)
+    ConfigureProblem.configure_taudot(ocp, nlp, as_states=False, as_controls=True)
+
+    # extra plots
+    ConfigureProblem.configure_qdotv(ocp, nlp, nlp.model._compute_qdot_v)
+    configure_lagrange_multipliers_function(
+        ocp, nlp, nlp.model.compute_the_lagrangian_multipliers, custom_q_v_init=custom_q_v_init
+    )
+
+    ConfigureProblem.configure_dynamics_function(ocp, nlp, holonomic_torque_derivative_driven_with_qv)
 
 
 def configure_lagrange_multipliers_function(ocp, nlp, dyn_func: Callable, custom_q_v_init):
@@ -185,3 +255,103 @@ def holonomic_torque_derivative_driven_custom_qv_init(
     qddot_u = nlp.model.partitioned_forward_dynamics()(q_u, qdot_u, custom_q_v_init, tau)
 
     return DynamicsEvaluation(dxdt=vertcat(qdot_u, qddot_u, taudot), defects=None)
+
+
+def holonomic_torque_derivative_driven_with_qv(
+    time,
+    states,
+    controls,
+    parameters,
+    algebraic_states,
+    numerical_timeseries,
+    nlp,
+) -> DynamicsEvaluation:
+    """
+    The custom dynamics function that provides the derivative of the states: dxdt = f(t, x, u, p, a, d)
+
+    Parameters
+    ----------
+    time: MX.sym | SX.sym
+        The time of the system
+    states: MX.sym | SX.sym
+        The state of the system
+    controls: MX.sym | SX.sym
+        The controls of the system
+    parameters: MX.sym | SX.sym
+        The parameters acting on the system
+    algebraic_states: MX.sym | SX.sym
+        The algebraic states of the system
+    numerical_timeseries: MX.sym | SX.sym
+        The numerical timeseries of the system
+    nlp: NonLinearProgram
+        A reference to the phase
+
+    Returns
+    -------
+    The derivative of the states in the tuple[MX | SX] format
+    """
+
+    q_v = DynamicsFunctions.get(nlp.algebraic_states["q_v"], algebraic_states)
+    q_u = DynamicsFunctions.get(nlp.states["q_u"], states)
+    qdot_u = DynamicsFunctions.get(nlp.states["qdot_u"], states)
+    tau = DynamicsFunctions.get(nlp.states["tau"], states)
+    taudot = controls
+    qddot_u = nlp.model.partitioned_forward_dynamics_with_qv()(q_u, q_v, qdot_u, tau)
+
+    return DynamicsEvaluation(dxdt=vertcat(qdot_u, qddot_u, taudot), defects=None)
+
+
+def constraint_holonomic_end(
+    controllers: PenaltyController,
+):
+    """
+    Minimize the distance between two markers
+    By default this function is quadratic, meaning that it minimizes distance between them.
+
+    Parameters
+    ----------
+    controller: PenaltyController
+        The penalty node elements
+    """
+
+    q_u = controllers.states["q_u"]
+    q_u_complete = q_u.mapping.to_second.map(q_u.cx)
+
+    q_v = controllers.algebraic_states["q_v"]
+    q_v_complete = q_v.mapping.to_second.map(q_v.cx)
+
+    q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
+
+    return controllers.model.holonomic_constraints(q)
+
+
+def constraint_holonomic(
+    controllers: PenaltyController,
+):
+    """
+    Minimize the distance between two markers
+    By default this function is quadratic, meaning that it minimizes distance between them.
+
+    Parameters
+    ----------
+    controller: PenaltyController
+        The penalty node elements
+    """
+
+    q_u = controllers.states["q_u"]
+    q_u_complete = q_u.mapping.to_second.map(q_u.cx)
+
+    q_v = controllers.algebraic_states["q_v"]
+    q_v_complete = q_v.mapping.to_second.map(q_v.cx)
+
+    q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
+
+    holonomic_constraints = controllers.model.holonomic_constraints(q)
+
+    for q_u_cx, q_v_cx in zip(q_u.cx_intermediates_list, q_v.cx_intermediates_list):
+        q_u_complete = q_u.mapping.to_second.map(q_u_cx)
+        q_v_complete = q_v.mapping.to_second.map(q_v_cx)
+        q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
+        holonomic_constraints = vertcat(holonomic_constraints, controllers.model.holonomic_constraints(q))
+
+    return holonomic_constraints
