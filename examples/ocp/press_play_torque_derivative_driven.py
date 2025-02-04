@@ -26,7 +26,7 @@ from bioptim import (
 )
 
 from pianoptim.models.pianist_holonomic import HolonomicPianist
-from pianoptim.models.constant import FINGER_TIP_ON_KEY_RELAXED
+from pianoptim.models.constant import FINGER_TIP_ON_KEY_RELAXED, KEY_TOP_UNPRESSED, KEY_TOP_PRESSED
 from pianoptim.utils.custom_functions import (
     custom_func_track_markers,
     custom_func_track_markers_velocity,
@@ -176,16 +176,12 @@ def prepare_ocp(
     x_bounds[-1]["qdot_u"].min[:, -1] = -0.01
     x_bounds[-1]["qdot_u"].max[:, -1] = 0.01
 
-    # Start and end with the finger on the key at top position without any velocity
-    START_POSE = np.array([[-0.16104043, -0.5356114, 0.124]]).T
-    BED_POSE = np.array([[-0.16104043, -0.5356114, 0.114]]).T
-
     constraints.add(
         custom_func_track_markers,
         phase=0,
         node=Node.START,
         marker="contact_finger",
-        target=START_POSE,
+        target=KEY_TOP_UNPRESSED,
         custom_qv_init=qv,
     )
     for i in range(0, 3):
@@ -198,63 +194,63 @@ def prepare_ocp(
             max_bound=[20, 20, 20],
         )
 
-    constraints.add(
-        custom_func_track_markers,
-        phase=0,
-        node=Node.INTERMEDIATES,
-        marker="contact_finger",
-        custom_qv_init=qv,
-        min_bound=BED_POSE,
-        max_bound=START_POSE,
-    )
+    # constraints.add(
+    #     custom_func_track_markers,
+    #     phase=0,
+    #     node=Node.INTERMEDIATES,
+    #     marker="contact_finger",
+    #     custom_qv_init=qv,
+    #     min_bound=KEY_TOP_PRESSED,
+    #     max_bound=KEY_TOP_UNPRESSED,
+    # )
 
-    constraints.add(
-        custom_func_track_markers,
-        phase=1,
-        node=Node.START,
-        marker="contact_finger",
-        # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
-        target=BED_POSE,
-        custom_qv_init=qv,
-        # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
-        # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
-    )
-    constraints.add(
-        custom_func_track_markers_velocity,
-        phase=1,
-        node=Node.ALL,
-        marker="contact_finger",
-        custom_qv_init=qv,
-    )
+    # constraints.add(
+    #     custom_func_track_markers,
+    #     phase=1,
+    #     node=Node.START,
+    #     marker="contact_finger",
+    #     # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
+    #     target=KEY_TOP_PRESSED,
+    #     custom_qv_init=qv,
+    #     # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
+    #     # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
+    # )
+    # constraints.add(
+    #     custom_func_track_markers_velocity,
+    #     phase=1,
+    #     node=Node.ALL,
+    #     marker="contact_finger",
+    #     custom_qv_init=qv,
+    # )
 
-    constraints.add(
-        custom_func_track_markers,
-        phase=1,
-        node=Node.END,
-        marker="contact_finger",
-        # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
-        target=BED_POSE,
-        custom_qv_init=qv,
-        # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
-        # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
-    )
+    # constraints.add(
+    #     custom_func_track_markers,
+    #     phase=1,
+    #     node=Node.END,
+    #     marker="contact_finger",
+    #     # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
+    #     target=KEY_TOP_PRESSED,
+    #     custom_qv_init=qv,
+    #     # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
+    #     # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
+    # )
+
+    # constraints.add(
+    #     custom_func_track_markers,
+    #     phase=2,
+    #     node=Node.ALL_SHOOTING,
+    #     marker="contact_finger",
+    #     custom_qv_init=qv,
+    #     min_bound=KEY_TOP_PRESSED,
+    #     max_bound=KEY_TOP_UNPRESSED,
+    # )
 
     constraints.add(
         custom_func_track_markers,
         phase=2,
-        node=Node.ALL_SHOOTING,
-        marker="contact_finger",
-        custom_qv_init=qv,
-        min_bound=BED_POSE,
-        max_bound=START_POSE,
-    )
-
-    constraints.add(
-        custom_func_track_markers,
-        phase=2,
         node=Node.END,
         marker="contact_finger",
-        target=START_POSE,
+        target=KEY_TOP_UNPRESSED,
         custom_qv_init=qv,
     )
 
@@ -338,7 +334,7 @@ def main():
 
     date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-    sol.graphs(show_bounds=True, save_name=f"../results/press_play_torque_derivative_driven_{date}.png")
+    sol.graphs(show_bounds=True, save_name=f"../../results/press_play_torque_derivative_driven_{date}.png")
 
 
 if __name__ == "__main__":

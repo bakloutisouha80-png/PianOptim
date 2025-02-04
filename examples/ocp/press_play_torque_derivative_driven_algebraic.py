@@ -23,10 +23,11 @@ from bioptim import (
     BiMappingList,
     TimeAlignment,
     SolutionMerge,
+    OnlineOptim, MultinodeConstraintList,
 )
 
 from pianoptim.models.pianist_holonomic import HolonomicPianist
-from pianoptim.models.constant import FINGER_TIP_ON_KEY_RELAXED
+from pianoptim.models.constant import FINGER_TIP_ON_KEY_RELAXED, KEY_TOP_PRESSED, KEY_TOP_UNPRESSED
 from pianoptim.utils.custom_functions import (
     custom_func_track_markers,
     custom_func_track_markers_velocity,
@@ -188,16 +189,13 @@ def prepare_ocp(
     x_bounds[-1]["qdot_u"].min[:, -1] = -0.01
     x_bounds[-1]["qdot_u"].max[:, -1] = 0.01
 
-    # Start and end with the finger on the key at top position without any velocity
-    START_POSE = np.array([[-0.16104043, -0.5356114, 0.124]]).T
-    BED_POSE = np.array([[-0.16104043, -0.5356114, 0.114]]).T
 
     constraints.add(
         custom_func_track_markers,
         phase=0,
         node=Node.START,
         marker="contact_finger",
-        target=START_POSE,
+        target=KEY_TOP_UNPRESSED,
         custom_qv_init=qv,
     )
     for i in range(0, 3):
@@ -216,8 +214,8 @@ def prepare_ocp(
         node=Node.INTERMEDIATES,
         marker="contact_finger",
         custom_qv_init=qv,
-        min_bound=BED_POSE,
-        max_bound=START_POSE,
+        min_bound=KEY_TOP_PRESSED,
+        max_bound=KEY_TOP_UNPRESSED,
     )
 
     constraints.add(
@@ -226,7 +224,7 @@ def prepare_ocp(
         node=Node.START,
         marker="contact_finger",
         # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
-        target=BED_POSE,
+        target=KEY_TOP_PRESSED,
         custom_qv_init=qv,
         # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
         # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
@@ -245,7 +243,7 @@ def prepare_ocp(
         node=Node.END,
         marker="contact_finger",
         # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
-        target=BED_POSE,
+        target=KEY_TOP_PRESSED,
         custom_qv_init=qv,
         # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
         # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
@@ -257,8 +255,8 @@ def prepare_ocp(
         node=Node.ALL_SHOOTING,
         marker="contact_finger",
         custom_qv_init=qv,
-        min_bound=BED_POSE,
-        max_bound=START_POSE,
+        min_bound=KEY_TOP_PRESSED,
+        max_bound=KEY_TOP_UNPRESSED,
     )
 
     constraints.add(
@@ -266,7 +264,7 @@ def prepare_ocp(
         phase=2,
         node=Node.END,
         marker="contact_finger",
-        target=START_POSE,
+        target=KEY_TOP_UNPRESSED,
         custom_qv_init=qv,
     )
 
@@ -329,12 +327,13 @@ def main():
     pyomodel = PyorerunBiorbdModel(model_path)
     stepwise_time = sol.stepwise_time(to_merge=SolutionMerge.NODES, time_alignment=TimeAlignment.STATES)
     stepwise_states = sol.stepwise_states(to_merge=SolutionMerge.NODES)
+    stepwise_astates = sol.decision_algebraic_states(to_merge=SolutionMerge.NODES)
 
     q = [np.zeros((pyomodel.nb_q, len(stepwise_time[phase]))) for phase in range(3)]
     for phase in range(3):
         q_u = stepwise_states[phase]["q_u"]
-        for i, q_u in enumerate(q_u.T):
-            q[phase][:, i] = sol.ocp.nlp[phase].model.compute_q()(q_u, qv).toarray().squeeze()
+        q_v = stepwise_astates[phase]["q_v"]
+        q[phase] = ocp.nlp[phase].model.state_from_partition(q_u, q_v).toarray()
 
     mprr = MultiPhaseRerun()
     mprr.add_phase(t_span=stepwise_time[0], phase=0)
@@ -352,7 +351,7 @@ def main():
 
     date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-    sol.graphs(show_bounds=True, save_name=f"../results/press_play_torque_derivative_driven_{date}.png")
+    sol.graphs(show_bounds=True, save_name=f"../../results/press_play_torque_derivative_driven_{date}.png")
 
 
 if __name__ == "__main__":
