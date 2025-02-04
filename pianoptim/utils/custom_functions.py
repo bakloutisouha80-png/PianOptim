@@ -31,8 +31,12 @@ def custom_func_track_markers(
     PenaltyFunctionAbstract._check_idx("marker", [first_marker_idx], controller.model.nb_markers)
 
     qu = controller.states["q_u"].mapping.to_second.map(controller.states["q_u"].cx)
-    qv_init = DM.zeros(controller.model.nb_dependent_joints) if custom_qv_init is None else DM(custom_qv_init)
-    q = controller.model.compute_q()(qu, qv_init)
+    if "q_v" in controller.algebraic_states:
+        qv = controller.algebraic_states["q_v"].cx
+        q = controller.model.state_from_partition(qu, qv)
+    else:
+        qv_init = DM.zeros(controller.model.nb_dependent_joints) if custom_qv_init is None else DM(custom_qv_init)
+        q = controller.model.compute_q()(qu, qv_init)
 
     diff_markers = controller.model.marker(first_marker_idx)(q, controller.parameters.cx)
 
@@ -64,8 +68,14 @@ def custom_func_track_markers_velocity(
 
     qu = controller.states["q_u"].mapping.to_second.map(controller.states["q_u"].cx)
     qdotu = controller.states["qdot_u"].mapping.to_second.map(controller.states["qdot_u"].cx)
-    qv_init = DM.zeros(controller.model.nb_dependent_joints) if custom_qv_init is None else DM(custom_qv_init)
-    q = controller.model.compute_q()(qu, qv_init)
+
+    if "q_v" in controller.algebraic_states:
+        qv = controller.algebraic_states["q_v"].cx
+        q = controller.model.state_from_partition(qu, qv)
+    else:
+        qv_init = DM.zeros(controller.model.nb_dependent_joints) if custom_qv_init is None else DM(custom_qv_init)
+        q = controller.model.compute_q()(qu, qv_init)
+
     qdot = controller.model.compute_qdot()(q, qdotu)
 
     marker_vel = controller.model.marker_velocity(first_marker_idx)(q, qdot, controller.parameters.cx)
@@ -78,6 +88,7 @@ def custom_func_superimpose_markers(
     first_marker: str | int,
     second_marker: str | int,
     axes: list[int] = [0, 1, 2],
+    custom_qv_init: np.ndarray = None,
 ):
     """
     Minimize the distance between two markers
@@ -99,8 +110,12 @@ def custom_func_superimpose_markers(
     )
     PenaltyFunctionAbstract._check_idx("marker", [first_marker_idx, second_marker_idx], controller.model.nb_markers)
     qu = controller.states["q_u"].mapping.to_second.map(controller.states["q_u"].cx)
-    qv_init = DM.zeros(controller.model.nb_dependent_joints)
-    q = controller.model.compute_q()(qu, qv_init)
+    if "q_v" in controller.algebraic_states:
+        qv = controller.algebraic_states["q_v"].cx
+        q = controller.model.state_from_partition(qu, qv)
+    else:
+        qv_init = DM.zeros(controller.model.nb_dependent_joints) if custom_qv_init is None else DM(custom_qv_init)
+        q = controller.model.compute_q()(qu, qv_init)
 
     diff_markers = controller.model.marker(second_marker_idx)(q, controller.parameters.cx) - controller.model.marker(
         first_marker_idx
@@ -113,8 +128,7 @@ def constraint_qv_init(
     controllers: list[PenaltyController],
 ):
     """
-    Minimize the distance between two markers
-    By default this function is quadratic, meaning that it minimizes distance between them.
+    The initial q_v of the second phase should be the final q_v of the first phase
 
     Parameters
     ----------
@@ -156,6 +170,8 @@ def constraint_qv_init(
 def custom_contraint_lambdas(controller: PenaltyController, custom_qv_init: np.ndarray = None) -> MX:
     """The model can only pull on the legs, not push"""
     # Recuperer les q
+    model = controller.model
+
     q_u = controller.states["q_u"].cx
     qdot_u = controller.states["qdot_u"].cx
 
@@ -163,7 +179,15 @@ def custom_contraint_lambdas(controller: PenaltyController, custom_qv_init: np.n
     tau_complete = tau.mapping.to_second.map(tau.cx)
 
     # Calculer lambdas
-    lambdas = controller.model.compute_the_lagrangian_multipliers()(q_u, qdot_u, custom_qv_init, tau_complete)
+    if "q_v" in controller.algebraic_states:
+        q_v = controller.algebraic_states["q_v"].cx
+        q = model.state_from_partition(q_u, q_v)
+        qdot = model.compute_qdot()(q, qdot_u)
+        qddot_u = model.partitioned_forward_dynamics_with_qv()(q_u, q_v, qdot_u, tau_complete)
+        qddot = model.compute_qddot()(q, qdot, qddot_u)
+        lambdas = model._compute_the_lagrangian_multipliers()(q, qdot, qddot, tau_complete)
+    else:
+        lambdas = model.compute_the_lagrangian_multipliers()(q_u, qdot_u, custom_qv_init, tau_complete)
 
     return lambdas
 
