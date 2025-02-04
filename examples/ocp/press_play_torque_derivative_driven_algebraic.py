@@ -23,7 +23,7 @@ from bioptim import (
     BiMappingList,
     TimeAlignment,
     SolutionMerge,
-    OnlineOptim, MultinodeConstraintList,
+    OnlineOptim,
 )
 
 from pianoptim.models.pianist_holonomic import HolonomicPianist
@@ -117,64 +117,56 @@ def prepare_ocp(
             node=Node.END,
             phase=i,
         )
-
-    x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", u_variable_bimapping), phase=0)
-    x_bounds.add("qdot_u", bounds=models[0].bounds_from_ranges("qdot", u_variable_bimapping), phase=0)
-    x_bounds.add("q_u", bounds=models[1].bounds_from_ranges("q", u_variable_bimapping), phase=1)
-    x_bounds.add("qdot_u", bounds=models[1].bounds_from_ranges("qdot", u_variable_bimapping), phase=1)
-    x_bounds.add("q_u", bounds=models[2].bounds_from_ranges("q", u_variable_bimapping), phase=2)
-    x_bounds.add("qdot_u", bounds=models[2].bounds_from_ranges("qdot", u_variable_bimapping), phase=2)
-
-    a_bounds.add("q_v", bounds=models[0].bounds_from_ranges("q", v_variable_bimapping), phase=0)
-    a_bounds.add("q_v", bounds=models[1].bounds_from_ranges("q", v_variable_bimapping), phase=1)
-    a_bounds.add("q_v", bounds=models[2].bounds_from_ranges("q", v_variable_bimapping), phase=2)
-
-    x_init.add("q_u", qu, phase=0)
-    x_init.add("q_u", qu, phase=1)
-    x_init.add("q_u", qu, phase=2)
-
-    x_init.add("qdot_u", [0] * (models[0].nb_q - 3), phase=0)
-    x_init.add("qdot_u", [0] * (models[1].nb_q - 3), phase=1)
-    x_init.add("qdot_u", [0] * (models[2].nb_q - 3), phase=2)
-
-    a_init.add("q_v", qv, phase=0)
-    a_init.add("q_v", qv, phase=1)
-    a_init.add("q_v", qv, phase=2)
-
-    x_bounds.add("tau", min_bound=[-40] * (models[0].nb_tau - 1), max_bound=[40] * (models[0].nb_tau - 1), phase=0)
-    x_bounds.add("tau", min_bound=[-40] * (models[1].nb_tau - 1), max_bound=[40] * (models[1].nb_tau - 1), phase=1)
-    x_bounds.add("tau", min_bound=[-40] * (models[2].nb_tau - 1), max_bound=[40] * (models[2].nb_tau - 1), phase=2)
-
-    x_init.add("tau", [0] * (models[0].nb_tau - 1), phase=0)
-    x_init.add("tau", [0] * (models[1].nb_tau - 1), phase=1)
-    x_init.add("tau", [0] * (models[2].nb_tau - 1), phase=2)
-
-    u_bounds.add(
-        "taudot", min_bound=[-10000] * (models[0].nb_tau - 1), max_bound=[10000] * (models[0].nb_tau - 1), phase=0
-    )
-    u_bounds.add(
-        "taudot", min_bound=[-10000] * (models[1].nb_tau - 1), max_bound=[10000] * (models[1].nb_tau - 1), phase=1
-    )
-    u_bounds.add(
-        "taudot", min_bound=[-10000] * (models[2].nb_tau - 1), max_bound=[10000] * (models[2].nb_tau - 1), phase=2
-    )
-
-    u_init.add("taudot", [0] * (models[0].nb_tau - 1), phase=0)
-    u_init.add("taudot", [0] * (models[1].nb_tau - 1), phase=1)
-    u_init.add("taudot", [0] * (models[2].nb_tau - 1), phase=2)
-
-    # Objective Functions
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=1, weight=0.001)
-
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=0, weight=1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=1, weight=1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_CONTROL, key="taudot", phase=2, weight=1)
-
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=0, weight=0.1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=1, weight=0.1)
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=2, weight=0.1)
+    # for i in range(1, 3):
+    #     multinode_constraints.add(
+    #         algebraic_continuity,
+    #         nodes=(Node.END, Node.START),
+    #         nodes_phase=(i - 1, i),
+    #     )
 
     for p in range(3):
+        x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", u_variable_bimapping), phase=p)
+        x_bounds.add("qdot_u", bounds=models[0].bounds_from_ranges("qdot", u_variable_bimapping), phase=p)
+
+        a_bounds.add("q_v", bounds=models[0].bounds_from_ranges("q", v_variable_bimapping), phase=p)
+
+        x_init.add("q_u", qu, phase=p)
+
+        x_init.add("qdot_u", [0] * (models[0].nb_q - 3), phase=p)
+
+        a_init.add("q_v", qv, phase=p)
+
+        x_bounds.add(
+            "tau",
+            min_bound=[-40] * (models[0].nb_tau - 1),
+            max_bound=[40] * (models[0].nb_tau - 1),
+            phase=p,
+        )
+
+        x_init.add("tau", [0] * (models[0].nb_tau - 1), phase=p)
+
+        u_bounds.add(
+            "taudot", min_bound=[-10000] * (models[0].nb_tau - 1), max_bound=[10000] * (models[0].nb_tau - 1), phase=p
+        )
+
+        u_init.add("taudot", [0] * (models[0].nb_tau - 1), phase=p)
+
+    # Objective Functions
+    elbow_wrist_idx = [8, 10]
+    no_elbow_wrist_idx = [i for i in range(12) if i not in elbow_wrist_idx]
+
+    for p in range(3):
+        # reduce the torque variation on all joints except elbow and wrist
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
+            key="taudot",
+            phase=p,
+            weight=1,
+            index=no_elbow_wrist_idx,
+        )
+        # reduce the torque on all joints
+        objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
+        # dont generate transverse forces along medial-lateral axis
         objective_functions.add(
             custom_contraint_lambdas,
             custom_type=ObjectiveFcn.Lagrange,
@@ -183,12 +175,12 @@ def prepare_ocp(
             weight=0.1,
             custom_qv_init=qv,
         )
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=1, weight=0.001)
 
     # The first and last frames are at rest
     x_bounds[0]["qdot_u"][:, 0] = 0
     x_bounds[-1]["qdot_u"].min[:, -1] = -0.01
     x_bounds[-1]["qdot_u"].max[:, -1] = 0.01
-
 
     constraints.add(
         custom_func_track_markers,
@@ -295,13 +287,17 @@ def prepare_ocp(
 
 def main():
     model_path = "../../pianoptim/models/pianist_and_key.bioMod"
-    n_shooting = (15, 15, 15)
-    min_phase_time = (0.04, 0.045, 0.05)
-    max_phase_time = (0.05, 0.055, 0.06)
+    # n_shooting = (15, 15, 15)
+    # ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
     # ode_solver = OdeSolver.RK2(n_integration_steps=5)
     # ode_solver = OdeSolver.RK4(n_integration_steps=5)
-    ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
-    #
+
+    n_shooting = (3, 3, 3)
+    ode_solver = OdeSolver.COLLOCATION(polynomial_degree=9)
+
+    min_phase_time = (0.04, 0.045, 0.05)
+    max_phase_time = (0.05, 0.055, 0.06)
+
     ocp, qv = prepare_ocp(
         model_path=model_path,
         n_shootings=n_shooting,
@@ -314,9 +310,9 @@ def main():
     solv = Solver.IPOPT(
         # online_optim=OnlineOptim.MULTIPROCESS_SERVER,
         # online_optim=OnlineOptim.DEFAULT,
-        # show_options={"show_bounds": True, "automatically_organize": False},
+        show_options={"show_bounds": True, "automatically_organize": False},
     )
-    solv.set_maximum_iterations(5000)
+    solv.set_maximum_iterations(500)
     solv.set_linear_solver("ma57")
     sol = ocp.solve(solv)
 
