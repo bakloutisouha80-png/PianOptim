@@ -7,6 +7,7 @@ So this is a three-phase problem:
 - Phase 1: The key is actively pressed into the bed
 - Phase 2: The key is released, from the bed and the finger is lifted up to the top position
 - Phase 3: The finger is lifted up to the top position
+- Phase 4: The finger is replaced to the key ready to play again
 """
 
 from bioptim import (
@@ -76,6 +77,7 @@ def prepare_ocp(
         HolonomicPianist(model_path),
         HolonomicPianist(model_path),
         HolonomicPianist(model_path),
+        BiorbdModel("../../pianoptim/models/pianist.bioMod"),
         BiorbdModel("../../pianoptim/models/pianist.bioMod"),
     )
     first_model = models[0]
@@ -270,45 +272,46 @@ def prepare_ocp(
 
     phase_times = [(min_t + max_t) / 2 for min_t, max_t in zip(min_phase_times, max_phase_times)]
 
-    dynamics.add(
-        DynamicsFcn.TORQUE_DERIVATIVE_DRIVEN,
-        phase=3,
-    )
+    for p in range(3, 5):
+        dynamics.add(
+            DynamicsFcn.TORQUE_DERIVATIVE_DRIVEN,
+            phase=p,
+        )
 
-    # fake mapping to make the OCP not crash
-    dof_mapping.add(
-        "tau",
-        to_second=[i for i in range(models[-1].nb_q)],
-        to_first=[i for i in range(models[-1].nb_q)],
-        phase=3,
-    )
-    dof_mapping.add(
-        "taudot",
-        to_second=[i for i in range(models[-1].nb_q)],
-        to_first=[i for i in range(models[-1].nb_q)],
-        phase=3,
-    )
+        # fake mapping to make the OCP not crash
+        dof_mapping.add(
+            "tau",
+            to_second=[i for i in range(models[-1].nb_q)],
+            to_first=[i for i in range(models[-1].nb_q)],
+            phase=p,
+        )
+        dof_mapping.add(
+            "taudot",
+            to_second=[i for i in range(models[-1].nb_q)],
+            to_first=[i for i in range(models[-1].nb_q)],
+            phase=p,
+        )
 
-    x_bounds.add("q", bounds=models[3].bounds_from_ranges("q"), phase=3)
-    x_bounds.add("qdot", bounds=models[3].bounds_from_ranges("qdot"), phase=3)
-    x_init.add("q", q[:-1], phase=3)
-    x_init.add("qdot", [0] * (models[3].nb_q), phase=3)
+        x_bounds.add("q", bounds=models[p].bounds_from_ranges("q"), phase=p)
+        x_bounds.add("qdot", bounds=models[p].bounds_from_ranges("qdot"), phase=p)
+        x_init.add("q", q[:-1], phase=p)
+        x_init.add("qdot", [0] * (models[p].nb_q), phase=3)
 
-    x_bounds.add(
-        "tau",
-        min_bound=[-40] * (models[3].nb_tau),
-        max_bound=[40] * (models[3].nb_tau),
-        phase=3,
-    )
-    x_init.add("tau", [0] * (models[3].nb_tau), phase=3)
+        x_bounds.add(
+            "tau",
+            min_bound=[-40] * (models[p].nb_tau),
+            max_bound=[40] * (models[p].nb_tau),
+            phase=p,
+        )
+        x_init.add("tau", [0] * (models[p].nb_tau), phase=3)
 
-    u_bounds.add(
-        "taudot",
-        min_bound=[-10000] * (models[3].nb_tau),
-        max_bound=[10000] * (models[3].nb_tau),
-        phase=3,
-    )
-    u_init.add("taudot", [0] * (models[3].nb_tau), phase=3)
+        u_bounds.add(
+            "taudot",
+            min_bound=[-10000] * (models[p].nb_tau),
+            max_bound=[10000] * (models[p].nb_tau),
+            phase=p,
+        )
+        u_init.add("taudot", [0] * (models[p].nb_tau), phase=p)
 
     phase_transitions.add(
         custom_phase_transition_algebraic_post,
@@ -316,35 +319,36 @@ def prepare_ocp(
     )
 
     # extra objectives
-    p = 3
-    objective_functions.add(
-        ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
-        key="taudot",
-        phase=p,
-        weight=1,
-        index=no_elbow_wrist_idx,
-    )
-    # reduce the torque on all joints
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=3, weight=0.1)
+    for p in range(3, 5):
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
+            key="taudot",
+            phase=p,
+            weight=1,
+            index=no_elbow_wrist_idx,
+        )
 
-    shoulder_non_flexion_dof = [7, 6]
-    objective_functions.add(
-        ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=3, weight=1, index=shoulder_non_flexion_dof
-    )
-    objective_functions.add(
-        ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot", phase=3, weight=0.1,
-                            index=shoulder_non_flexion_dof
-    )
+        # reduce the torque on all joints
+        objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
 
-    constraints.add(
-        ConstraintFcn.TRACK_MARKERS,
-        phase=3,
-        node=Node.ALL_SHOOTING,
-        marker_index="contact_finger",
-        min_bound=KEY_TOP_UNPRESSED,  # ;qke sure bound only x direction todo tomorrow
-        max_bound=ELEVATED_FINGER_TIP,
-        index=0
-    )
+        shoulder_non_flexion_dof = [7, 6]
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=p, weight=1, index=shoulder_non_flexion_dof
+        )
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot", phase=p, weight=0.1,
+                                index=shoulder_non_flexion_dof
+        )
+
+        constraints.add(
+            ConstraintFcn.TRACK_MARKERS,
+            phase=p,
+            node=Node.ALL_SHOOTING,
+            marker_index="contact_finger",
+            min_bound=KEY_TOP_UNPRESSED,
+            max_bound=ELEVATED_FINGER_TIP,
+            index=0  # make sure bound only x direction
+        )
 
     constraints.add(
         ConstraintFcn.TRACK_MARKERS,
@@ -352,6 +356,14 @@ def prepare_ocp(
         node=Node.END,
         marker_index="contact_finger",
         target=ELEVATED_FINGER_TIP,
+    )
+
+    constraints.add(
+        ConstraintFcn.TRACK_MARKERS,
+        phase=4,
+        node=Node.END,
+        marker_index="contact_finger",
+        target=KEY_TOP_UNPRESSED,
     )
 
     # The first and last frames are at rest
@@ -392,16 +404,17 @@ def main():
     # ode_solver = OdeSolver.RK2(n_integration_steps=5)
     # ode_solver = OdeSolver.RK4(n_integration_steps=5)
 
-    n_shooting = (3, 3, 3, 30)
+    n_shooting = (3, 3, 3, 30, 3)
     ode_solver = [
         OdeSolver.COLLOCATION(polynomial_degree=9),
         OdeSolver.COLLOCATION(polynomial_degree=9),
         OdeSolver.COLLOCATION(polynomial_degree=9),
         OdeSolver.COLLOCATION(polynomial_degree=3),
+        OdeSolver.COLLOCATION(polynomial_degree=9),
     ]
 
-    min_phase_time = (0.04, 0.045, 0.05, 0.25)
-    max_phase_time = (0.05, 0.055, 0.06, 0.35)
+    min_phase_time = (0.04, 0.045, 0.05, 0.225, 0.05)
+    max_phase_time = (0.05, 0.055, 0.06, 0.275, 0.05)
 
     ocp, qv = prepare_ocp(
         model_path=model_path,
@@ -441,16 +454,18 @@ def main():
     mprr.add_phase(t_span=stepwise_time[1], phase=1)
     mprr.add_phase(t_span=stepwise_time[2], phase=2)
     mprr.add_phase(t_span=stepwise_time[3], phase=3)
+    mprr.add_phase(t_span=stepwise_time[4], phase=4)
 
     mprr.add_animated_model(pyomodel, q[0], phase=0)
     mprr.add_animated_model(pyomodel, q[1], phase=1)
     mprr.add_animated_model(pyomodel, q[2], phase=2)
 
     # add 1 row of zeros under last phase q
-    qtemp = stepwise_states[3]["q"]
-    nb_steps = len(stepwise_time[3])
-    q.append(np.vstack((qtemp, np.zeros((1, nb_steps)))))
-    mprr.add_animated_model(pyomodel, q[3], phase=3)
+    for p in range(3, 5):
+        qtemp = stepwise_states[p]["q"]
+        nb_steps = len(stepwise_time[p])
+        q.append(np.vstack((qtemp, np.zeros((1, nb_steps)))))
+        mprr.add_animated_model(pyomodel, q[p], phase=p)
 
     mprr.rerun()
     sol.print_cost()
