@@ -47,7 +47,6 @@ from pianoptim.utils.torque_derivative_holonomic_driven import (
     holonomic_torque_derivative_driven_with_qv,
     constraint_holonomic,
     constraint_holonomic_end,
-    algebraic_continuity,
 )
 
 
@@ -325,17 +324,26 @@ def prepare_ocp(
         index=no_elbow_wrist_idx,
     )
     # reduce the torque on all joints
-    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
+    objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=3, weight=0.1)
 
-    # constraints.add(
-    #     ConstraintFcn.TRACK_MARKERS,
-    #     phase=3,
-    #     node=Node.ALL_SHOOTING,
-    #     marker="contact_finger",
-    #     custom_qv_init=qv,
-    #     min_bound=KEY_TOP_UNPRESSED,
-    #     max_bound=ELEVATED_FINGER_TIP,
-    # )
+    shoulder_non_flexion_dof = [7, 6]
+    objective_functions.add(
+        ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=3, weight=1, index=shoulder_non_flexion_dof
+    )
+    objective_functions.add(
+        ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot", phase=3, weight=0.1,
+                            index=shoulder_non_flexion_dof
+    )
+
+    constraints.add(
+        ConstraintFcn.TRACK_MARKERS,
+        phase=3,
+        node=Node.ALL_SHOOTING,
+        marker_index="contact_finger",
+        min_bound=KEY_TOP_UNPRESSED,  # ;qke sure bound only x direction todo tomorrow
+        max_bound=ELEVATED_FINGER_TIP,
+        index=0
+    )
 
     constraints.add(
         ConstraintFcn.TRACK_MARKERS,
@@ -401,7 +409,7 @@ def main():
         max_phase_times=max_phase_time,
         ode_solver=ode_solver,
     )
-    ocp.add_plot_penalty(CostType.ALL)
+    ocp.add_plot_penalty(CostType.OBJECTIVES)
 
     solv = Solver.IPOPT(
         # online_optim=OnlineOptim.MULTIPROCESS_SERVER,
@@ -438,10 +446,10 @@ def main():
     mprr.add_animated_model(pyomodel, q[2], phase=2)
 
     # add 1 row of zeros under last phase q
-    q = stepwise_states[3]["q"]
+    qtemp = stepwise_states[3]["q"]
     nb_steps = len(stepwise_time[3])
-    q = np.vstack((q, np.zeros((1, nb_steps))))
-    mprr.add_animated_model(pyomodel, q, phase=3)
+    q.append(np.vstack((qtemp, np.zeros((1, nb_steps)))))
+    mprr.add_animated_model(pyomodel, q[3], phase=3)
 
     mprr.rerun()
     sol.print_cost()
