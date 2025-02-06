@@ -132,12 +132,6 @@ def prepare_ocp(
             node=Node.END,
             phase=i,
         )
-    # for i in range(1, 3):
-    #     multinode_constraints.add(
-    #         algebraic_continuity,
-    #         nodes=(Node.END, Node.START),
-    #         nodes_phase=(i - 1, i),
-    #     )
 
     for p in range(3):
         x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", u_variable_bimapping), phase=p)
