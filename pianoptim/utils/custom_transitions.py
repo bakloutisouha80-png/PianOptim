@@ -64,6 +64,34 @@ def custom_phase_transition_algebraic_post(controllers: list[PenaltyController, 
     return states_pre - states_post
 
 
+def custom_phase_transition_algebraic_pre(controllers: list[PenaltyController, PenaltyController]) -> MX:
+    """
+    The constraint of the transition from a holonomic to an model without holonomic constraints.
+
+    Parameters
+    ----------
+    controllers: list[PenaltyController, PenaltyController]
+        The controller for all the nodes in the penalty
+
+    Returns
+    -------
+    The constraint such that: (q-, qdot-) = (q+, qdot+)
+    """
+    states_pre = vertcat(controllers[0].states["q"].cx, controllers[0].states["qdot"].cx)
+
+    u_post = controllers[1].states["q_u"].cx
+    udot_post = controllers[1].states["qdot_u"].cx
+    v_post = controllers[1].algebraic_states["q_v"].cx
+
+    q_post = controllers[1].model.state_from_partition(u_post, v_post)
+    qdot_post = controllers[1].model.compute_qdot()(q_post, udot_post)
+
+    states_post = vertcat(q_post[:-1], qdot_post[:-1])
+
+
+    return states_pre - states_post
+
+
 def custom_takeoff(controllers: list[PenaltyController, PenaltyController]):
     """
     A discontinuous function that simulates an inelastic impact of a new contact point
