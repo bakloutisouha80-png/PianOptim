@@ -2,6 +2,8 @@ from bioptim import PenaltyController
 from casadi import MX, vertcat
 from warnings import warn
 
+from .collision import collision_impact
+
 
 def custom_phase_transition_pre(controllers: list[PenaltyController, PenaltyController]) -> MX:
     """
@@ -101,6 +103,36 @@ def custom_phase_transition_algebraic_pre(controllers: list[PenaltyController, P
     states_post = vertcat(states_post, tau_states_post)
 
     return states_pre - states_post
+
+
+def transition_algebraic_pre_with_collision(controllers: list[PenaltyController, PenaltyController]) -> MX:
+    """
+    The constraint of the transition from a holonomic to an model without holonomic constraints.
+
+    Parameters
+    ----------
+    controllers: list[PenaltyController, PenaltyController]
+        The controller for all the nodes in the penalty
+
+    Returns
+    -------
+    The constraint such that: (q-, qdot-) = (q+, qdot+)
+    """
+    q_pre = controllers[0].states["q"].cx
+    qdot_pre = controllers[0].states["qdot"].cx
+    # add the position and velocity of the key to zero
+    q_pre = vertcat(q_pre, 0)
+    qdot_pre = vertcat(qdot_pre, 0)
+    qdot_post_estimated = collision_impact(controllers[1].model, q_pre, qdot_pre)
+
+    u_post = controllers[1].states["q_u"].cx
+    udot_post = controllers[1].states["qdot_u"].cx
+    v_post = controllers[1].algebraic_states["q_v"].cx
+
+    q_post = controllers[1].model.state_from_partition(u_post, v_post)
+    qdot_post = controllers[1].model.compute_qdot()(q_post, udot_post)
+
+    return vertcat(q_pre - q_post, qdot_post_estimated - qdot_post)
 
 
 def custom_takeoff(controllers: list[PenaltyController, PenaltyController]):
