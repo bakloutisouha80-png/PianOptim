@@ -61,6 +61,12 @@ def custom_phase_transition_algebraic_post(controllers: list[PenaltyController, 
     states_pre = vertcat(q_pre[:-1], qdot_pre[:-1])
     states_post = vertcat(controllers[1].states["q"].cx, controllers[1].states["qdot"].cx)
 
+    tau_states_pre = controllers[0].states["tau"].cx
+    tau_states_post = controllers[1].states["tau"].cx
+
+    states_pre = vertcat(states_pre, tau_states_pre)
+    states_post = vertcat(states_post, tau_states_post)
+
     return states_pre - states_post
 
 
@@ -88,6 +94,11 @@ def custom_phase_transition_algebraic_pre(controllers: list[PenaltyController, P
 
     states_post = vertcat(q_post[:-1], qdot_post[:-1])
 
+    tau_states_pre = controllers[0].states["tau"].cx
+    tau_states_post = controllers[1].states["tau"].cx
+
+    states_pre = vertcat(states_pre, tau_states_pre)
+    states_post = vertcat(states_post, tau_states_post)
 
     return states_pre - states_post
 
