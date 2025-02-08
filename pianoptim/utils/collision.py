@@ -24,7 +24,7 @@ def collision_impact(model, q, qdot_minus, e=0):
     M_inv = model.model.massMatrixInverse(q).to_mx()  # shape: (n x n)
 
     # 2) Constraint Jacobian
-    J = model.constraint_jacobian(q)  # shape: (m x n)
+    J = model.holonomic_constraints_jacobian(q)  # shape: (m x n)
     J_T = J.T  # shape: (n x m)
 
     # 3) Delassus matrix S = J * M^{-1} * J^T

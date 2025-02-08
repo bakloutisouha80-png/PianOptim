@@ -41,7 +41,9 @@ from pianoptim.utils.custom_functions import (
     custom_func_track_markers_velocity,
     custom_contraint_lambdas,
 )
-from pianoptim.utils.custom_transitions import custom_phase_transition_algebraic_post, custom_phase_transition_algebraic_pre
+from pianoptim.utils.custom_transitions import (custom_phase_transition_algebraic_post,
+                                                custom_phase_transition_algebraic_pre,
+                                                transition_algebraic_pre_with_collision)
 
 import numpy as np
 
@@ -395,7 +397,8 @@ def prepare_ocp(
     x_bounds[-1]["qdot"].max[:, -1] = 0.1
 
     multinode_constraints.add(
-        custom_phase_transition_algebraic_pre,
+        # custom_phase_transition_algebraic_pre,
+        transition_algebraic_pre_with_collision,
         nodes_phase=(5,0),
         nodes=(Node.END, Node.START),
     )
@@ -460,7 +463,7 @@ def main():
         # online_optim=OnlineOptim.DEFAULT,
         show_options={"show_bounds": True, "automatically_organize": False},
     )
-    solv.set_maximum_iterations(1000)
+    solv.set_maximum_iterations(10000)
     solv.set_linear_solver("ma57")
     sol = ocp.solve(solv)
 

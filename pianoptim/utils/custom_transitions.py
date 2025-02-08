@@ -132,7 +132,10 @@ def transition_algebraic_pre_with_collision(controllers: list[PenaltyController,
     q_post = controllers[1].model.state_from_partition(u_post, v_post)
     qdot_post = controllers[1].model.compute_qdot()(q_post, udot_post)
 
-    return vertcat(q_pre - q_post, qdot_post_estimated - qdot_post)
+    tau_states_pre = controllers[0].states["tau"].cx
+    tau_states_post = controllers[1].states["tau"].cx
+
+    return vertcat(q_pre - q_post, qdot_post_estimated - qdot_post, tau_states_pre - tau_states_post)
 
 
 def custom_takeoff(controllers: list[PenaltyController, PenaltyController]):
