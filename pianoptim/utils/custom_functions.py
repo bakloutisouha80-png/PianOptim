@@ -167,6 +167,43 @@ def constraint_qv_init(
     return qv_end - qv_start
 
 
+def minimize_qdot_v_intermediates(
+    controllers: PenaltyController,
+    dof_idx: int = None,
+):
+    """
+    Minimize the qdot_v from q_u, qdot_u, q_v
+
+
+    Parameters
+    ----------
+    controller: PenaltyController
+        The penalty node elements
+    """
+    if dof_idx is None:
+        dof_idx = [i for i in range(controllers.model.nb_independent_joints)]
+
+    q_u = controllers.states["q_u"]
+    q_u_complete = q_u.mapping.to_second.map(q_u.cx)
+    qdot_u = controllers.states["qdot_u"]
+    qdot_u_complete = qdot_u.mapping.to_second.map(qdot_u.cx)
+
+    q_v = controllers.algebraic_states["q_v"]
+    q_v_complete = q_v.mapping.to_second.map(q_v.cx)
+
+    q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
+    qdot_v = controllers.model.compute_qdot_v()(q, qdot_u_complete)[dof_idx]
+
+    for q_u_cx, q_v_cx in zip(q_u.cx_intermediates_list, q_v.cx_intermediates_list):
+        q_u_complete = q_u.mapping.to_second.map(q_u_cx)
+        qdot_u_complete = qdot_u.mapping.to_second.map(qdot_u.cx_intermediates_list)
+        q_v_complete = q_v.mapping.to_second.map(q_v_cx)
+        q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
+        qdot_v = vertcat(qdot_v, controllers.model.compute_qdot_v()(q, qdot_u_complete)[dof_idx])
+
+    return qdot_v
+
+
 def custom_contraint_lambdas(controller: PenaltyController, custom_qv_init: np.ndarray = None) -> MX:
     """The model can only pull on the legs, not push"""
     # Recuperer les q

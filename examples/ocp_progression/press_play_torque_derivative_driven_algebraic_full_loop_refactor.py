@@ -54,6 +54,12 @@ from pianoptim.utils.torque_derivative_holonomic_driven import (
     constraint_holonomic_end,
 )
 
+HOLONOMIC_PHASES = [0, 1, 2, 3]
+CONSTRAINT_FREE_PHASES = [4, 5]
+FINGER_DOF_IDX = 11
+TAUDOT_MAX, TAUDOT_MIN = 5000, -5000
+ELBOW_WRIST_IDX = [8, 10]
+SHOULDER_NON_FLEXION_IDX = [7, 6]
 
 def prepare_ocp(
     model_path: str,
@@ -79,6 +85,18 @@ def prepare_ocp(
         BiorbdModel("../../pianoptim/models/pianist.bioMod"),
     )
     first_model = models[0]
+
+
+    holo_friction_coefficients = np.zeros(first_model.nb_q)
+    # todo : better modeled with
+    #   https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00041/full
+    holo_friction_coefficients[FINGER_DOF_IDX] = 0.05
+    non_holo_friction_coefficients = holo_friction_coefficients[:first_model.nb_q - 1]
+
+    for p in HOLONOMIC_PHASES:
+        models[p].set_friction_coefficients(holo_friction_coefficients)
+    for p in CONSTRAINT_FREE_PHASES:
+        models[p].set_friction_coefficients(non_holo_friction_coefficients)
 
     u_to_second = [0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9, None]
     u_to_first = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
@@ -113,7 +131,7 @@ def prepare_ocp(
     u_init = InitialGuessList()
 
     dof_mapping = BiMappingList()
-    for p in range(4):
+    for p in HOLONOMIC_PHASES:
         dof_mapping.add(
             "tau",
             to_second=tau_to_second,
@@ -127,11 +145,10 @@ def prepare_ocp(
             phase=p,
         )
 
-    q = FINGER_TIP_ON_KEY_RELAXED
-    qu = q[first_model.independent_joint_index]
-    qv = q[first_model.dependent_joint_index]
+    qu = FINGER_TIP_ON_KEY_RELAXED[first_model.independent_joint_index]
+    qv = FINGER_TIP_ON_KEY_RELAXED[first_model.dependent_joint_index]
 
-    for p in range(4):
+    for p in HOLONOMIC_PHASES:
         dynamics.add(
             configure_holonomic_torque_derivative_driven_with_qv,
             dynamic_function=holonomic_torque_derivative_driven_with_qv,
@@ -150,15 +167,13 @@ def prepare_ocp(
             phase=p,
         )
 
-    for p in range(4, 6):
+    for p in CONSTRAINT_FREE_PHASES:
         dynamics.add(
             DynamicsFcn.TORQUE_DERIVATIVE_DRIVEN,
             phase=p,
         )
 
-    taudot_max, taudot_min = 5000, -5000
-
-    for p in range(4):
+    for p in HOLONOMIC_PHASES:
         x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", u_variable_bimapping), phase=p)
         x_bounds.add("qdot_u", bounds=models[0].bounds_from_ranges("qdot", u_variable_bimapping), phase=p)
 
@@ -178,36 +193,45 @@ def prepare_ocp(
         x_init.add("tau", [0] * NB_TAU, phase=p)
 
         u_bounds.add(
-            "taudot", min_bound=[-taudot_min] * NB_TAU, max_bound=[taudot_max] * NB_TAU, phase=p
+            "taudot", min_bound=[TAUDOT_MIN] * NB_TAU, max_bound=[TAUDOT_MAX] * NB_TAU, phase=p
         )
 
         u_init.add("taudot", [0] * NB_TAU, phase=p)
 
     #  GUIDING THE KEY HEIGHT
-    a_bounds[0]["q_v"].min[-1, :] = 0.0025
-    a_bounds[0]["q_v"].max[-1, :] = -0.0025
     # Reducing the key bounds
     # this should go from 0 to -0.01,
     # but I let a bit of slack to avoid numerical issues
-    a_bounds[1]["q_v"].min[-1, 0] = 0.0025
-    a_bounds[1]["q_v"].max[-1, 0] = -0.0025
+    a_bounds[0]["q_v"].min[-1, :] = -0.0025
+    a_bounds[0]["q_v"].max[-1, :] = 0.0025
 
+    a_bounds[1]["q_v"].min[-1, 0] = -0.020
+    a_bounds[1]["q_v"].max[-1, 0] = 0.01
+
+    # I can't tighten the bounds too much
+    # the initial guess wont be able to slide on the holonomic constraints
     a_bounds[1]["q_v"].min[-1, 1] = -0.020
     a_bounds[1]["q_v"].max[-1, 1] = 0.01
 
-    a_bounds[1]["q_v"].min[-1, 2] = -0.01025
-    a_bounds[1]["q_v"].max[-1, 2] = -0.00975
+    a_bounds[1]["q_v"].min[-1, 2] = -0.015
+    a_bounds[1]["q_v"].max[-1, 2] = 0.0025
+    # a_bounds[1]["q_v"].min[-1, 2] = -0.015
+    # a_bounds[1]["q_v"].max[-1, 2] = -0.005
 
-    a_bounds[2]["q_v"].min[-1, :] = -0.01025
-    a_bounds[2]["q_v"].max[-1, :] = -0.00975
+    a_bounds[2]["q_v"].min[-1, :] = -0.015
+    a_bounds[2]["q_v"].max[-1, :] = 0.0025
+    # a_bounds[2]["q_v"].min[-1, :] = -0.015
+    # a_bounds[2]["q_v"].max[-1, :] = -0.005
 
-    a_bounds[3]["q_v"].min[-1, 0] = -0.01025
-    a_bounds[3]["q_v"].max[-1, 0] = -0.00975
+    a_bounds[3]["q_v"].min[-1, 0] = -0.015
+    a_bounds[3]["q_v"].max[-1, 0] = 0.0025
+    # a_bounds[3]["q_v"].min[-1, 0] = -0.015
+    # a_bounds[3]["q_v"].max[-1, 0] = -0.005
 
     a_bounds[3]["q_v"].min[-1, 1:] = -0.020
     a_bounds[3]["q_v"].max[-1, 1:] = 0.01
 
-    for p in range(4, 6):
+    for p in CONSTRAINT_FREE_PHASES:
 
         # mapping that map nothing to make the OCP not crash
         to_second = [i for i in range(models[-1].nb_q)]
@@ -227,7 +251,7 @@ def prepare_ocp(
 
         x_bounds.add("q", bounds=models[p].bounds_from_ranges("q"), phase=p)
         x_bounds.add("qdot", bounds=models[p].bounds_from_ranges("qdot"), phase=p)
-        x_init.add("q", q[:-1], phase=p)
+        x_init.add("q", FINGER_TIP_ON_KEY_RELAXED[:-1], phase=p)
         x_init.add("qdot", [0] * (models[p].nb_q), phase=p)
 
         x_bounds.add(
@@ -240,26 +264,26 @@ def prepare_ocp(
 
         u_bounds.add(
             "taudot",
-            min_bound=[-taudot_min] * NB_TAU,
-            max_bound=[taudot_max] * NB_TAU,
+            min_bound=[TAUDOT_MIN] * NB_TAU,
+            max_bound=[TAUDOT_MAX] * NB_TAU,
             phase=p,
         )
         u_init.add("taudot", [0] * NB_TAU, phase=p)
 
     # Objective Functions
-    elbow_wrist_idx = [8, 10]
-    shoulder_non_flexion_dof = [7, 6]
-    no_elbow_wrist_idx = [i for i in range(first_model.nb_q) if i not in elbow_wrist_idx]
+    no_elbow_wrist_idx = [i for i in range(NB_TAU) if i not in ELBOW_WRIST_IDX]
 
+    # TODO: make sure the penalties on forces are ok
     objective_functions.add(
         custom_contraint_lambdas,
         custom_type=ObjectiveFcn.Lagrange,
-        index=[0, 2],
+        index=[0, 2],  # only the x mediolat and z translation of the key are penalized
         phase=0,
         weight=0.1,
         custom_qv_init=qv,
+        quadratic=True,
     )
-    for p in range(4):
+    for p in HOLONOMIC_PHASES:
         # reduce the torque variation on all joints except elbow and wrist
         objective_functions.add(
             ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
@@ -270,22 +294,45 @@ def prepare_ocp(
         )
         # reduce the torque on all joints
         objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
-        # dont generate transverse forces along medial-lateral axis
+
+        # dont generate transverse forces along medio-lateral axis
         objective_functions.add(
             custom_contraint_lambdas,
             custom_type=ObjectiveFcn.Lagrange,
-            index=[2],
+            # todo: is it the right index? i believe I should have put the index of the mediolateral axis 0
+            index=[2], # only the z-translation of the key is penalized
             phase=p,
             weight=0.1,
             custom_qv_init=qv,
+            quadratic=True,
         )
 
     # Trying to help with no speed of joint to garanty no speed of the key
     # But as side effects
+    # todo: minimize the speed of the key qv
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=0, weight=0.001)
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=2, weight=0.001)
 
-    for p in range(4, 6):
+    # todo: uncomment to try after a convergence / to replace the previous objectives
+    # objective_functions.add(
+    #     minimize_qdot_v,
+    #     custom_type=ObjectiveFcn.Mayer,
+    #     phase=0,
+    #     weight=1,
+    #     quadratic=True,
+    #     dof_idx=[2],  # only the z-translation of the key is penalized
+    # )
+    # objective_functions.add(
+    #     minimize_qdot_v,
+    #     custom_type=ObjectiveFcn.Mayer,
+    #     phase=2,
+    #     weight=1,
+    #     quadratic=True,
+    #     dof_idx=[2], # only z-the translation of the key is penalized
+    # )
+
+
+    for p in CONSTRAINT_FREE_PHASES:
         objective_functions.add(
             ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
             key="taudot",
@@ -298,11 +345,11 @@ def prepare_ocp(
         objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
 
         objective_functions.add(
-            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=p, weight=1, index=shoulder_non_flexion_dof
+            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=p, weight=1, index=SHOULDER_NON_FLEXION_IDX
         )
         objective_functions.add(
             ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot", phase=p, weight=0.1,
-                                index=shoulder_non_flexion_dof
+                                index=SHOULDER_NON_FLEXION_IDX
         )
 
         constraints.add(
@@ -324,6 +371,8 @@ def prepare_ocp(
         custom_qv_init=qv,
     )
 
+    # PB This constraint is only applied on the first node of the interval
+    #   but not on the intermediate nodes of the collocation states
     constraints.add(
         custom_func_track_markers_velocity,
         phase=0,
@@ -340,7 +389,9 @@ def prepare_ocp(
         target=KEY_TOP_UNPRESSED,
         custom_qv_init=qv,
     )
-    for i in range(0, 4):
+
+    # Bounding the contact forces
+    for i in HOLONOMIC_PHASES:
         constraints.add(
             custom_contraint_lambdas,
             phase=i,
@@ -350,6 +401,7 @@ def prepare_ocp(
             max_bound=[20, 20, 20],
         )
 
+    # non-linear inequality constraints on the finger pose, instead of the astate qv
     constraints.add(
         custom_func_track_markers,
         phase=1,
@@ -365,12 +417,11 @@ def prepare_ocp(
         phase=2,
         node=Node.START,
         marker="contact_finger",
-        # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
         target=KEY_TOP_PRESSED,
         custom_qv_init=qv,
-        # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
-        # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
     )
+    # PB This constraint is only applied on the first node of the interval
+    #   but not on the intermediate nodes of the collocation states
     constraints.add(
         custom_func_track_markers_velocity,
         phase=2,
@@ -407,15 +458,6 @@ def prepare_ocp(
         custom_qv_init=qv,
     )
 
-
-
-    phase_transitions.add(
-        custom_phase_transition_algebraic_post,
-        phase_pre_idx=3,
-    )
-
-
-
     constraints.add(
         ConstraintFcn.TRACK_MARKERS,
         phase=4,
@@ -436,6 +478,12 @@ def prepare_ocp(
     x_bounds[0]["qdot_u"][:, 0] = 0
     x_bounds[-1]["qdot"].min[:, -1] = -0.1
     x_bounds[-1]["qdot"].max[:, -1] = 0.1
+
+    #  TRANSITIONS
+    phase_transitions.add(
+        custom_phase_transition_algebraic_post,
+        phase_pre_idx=3,
+    )
 
     multinode_constraints.add(
         # custom_phase_transition_algebraic_pre,
