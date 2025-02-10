@@ -64,12 +64,6 @@ def prepare_ocp(
 ) -> OptimalControlProgram:
 
     dynamics = DynamicsList()
-    x_bounds = BoundsList()
-    x_init = InitialGuessList()
-    a_bounds = BoundsList()
-    a_init = InitialGuessList()
-    u_bounds = BoundsList()
-    u_init = InitialGuessList()
     objective_functions = ObjectiveList()
     constraints = ConstraintList()
     multinode_constraints = MultinodeConstraintList()
@@ -86,88 +80,176 @@ def prepare_ocp(
     )
     first_model = models[0]
 
+    u_to_second = [0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9, None]
+    u_to_first = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
+
+    v_to_second = [None, None, None, None, None, 0, 1, None, None, None, None, None, 3]
+    v_to_first = [5, 6, 12]
+
     u_variable_bimapping = BiMappingList()
     u_variable_bimapping.add(
-        "q", to_second=[0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9, None], to_first=[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
+        "q", to_second=u_to_second, to_first=u_to_first
     )
     u_variable_bimapping.add(
-        "qdot", to_second=[0, 1, 2, 3, 4, None, None, 5, 6, 7, 8, 9, None], to_first=[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]
+        "qdot", to_second=u_to_second, to_first=u_to_first
     )
+
 
     v_variable_bimapping = BiMappingList()
     v_variable_bimapping.add(
-        "q", to_second=[None, None, None, None, None, 0, 1, None, None, None, None, None, 3], to_first=[5, 6, 12]
+        "q", to_second=v_to_second, to_first=v_to_first
     )
+
+    NB_TAU = first_model.nb_tau - 1
+
+    tau_to_second = [i for i in range(NB_TAU)] + [None]
+    tau_to_first = [i for i in range(NB_TAU)]
+
+    x_bounds = BoundsList()
+    x_init = InitialGuessList()
+    a_bounds = BoundsList()
+    a_init = InitialGuessList()
+    u_bounds = BoundsList()
+    u_init = InitialGuessList()
 
     dof_mapping = BiMappingList()
     for p in range(4):
         dof_mapping.add(
             "tau",
-            to_second=[i for i in range(first_model.nb_q - 1)] + [None],
-            to_first=[i for i in range(first_model.nb_q - 1)],
+            to_second=tau_to_second,
+            to_first=tau_to_first,
             phase=p,
         )
         dof_mapping.add(
             "taudot",
-            to_second=[i for i in range(first_model.nb_q - 1)] + [None],
-            to_first=[i for i in range(first_model.nb_q - 1)],
+            to_second=tau_to_second,
+            to_first=tau_to_first,
             phase=p,
         )
 
     q = FINGER_TIP_ON_KEY_RELAXED
-    qu = q[[0, 1, 2, 3, 4, 7, 8, 9, 10, 11]]
-    qv = q[[5, 6, 12]]
+    qu = q[first_model.independent_joint_index]
+    qv = q[first_model.dependent_joint_index]
 
-    for i in range(4):
+    for p in range(4):
         dynamics.add(
             configure_holonomic_torque_derivative_driven_with_qv,
             dynamic_function=holonomic_torque_derivative_driven_with_qv,
             custom_q_v_init=qv,
-            phase=i,
+            phase=p,
         )
         # Path Constraints
         constraints.add(
             constraint_holonomic,
             node=Node.ALL_SHOOTING,
-            phase=i,
+            phase=p,
         )
         constraints.add(
             constraint_holonomic_end,
             node=Node.END,
-            phase=i,
+            phase=p,
         )
+
+    for p in range(4, 6):
+        dynamics.add(
+            DynamicsFcn.TORQUE_DERIVATIVE_DRIVEN,
+            phase=p,
+        )
+
+    taudot_max, taudot_min = 5000, -5000
 
     for p in range(4):
         x_bounds.add("q_u", bounds=models[0].bounds_from_ranges("q", u_variable_bimapping), phase=p)
         x_bounds.add("qdot_u", bounds=models[0].bounds_from_ranges("qdot", u_variable_bimapping), phase=p)
 
         a_bounds.add("q_v", bounds=models[0].bounds_from_ranges("q", v_variable_bimapping), phase=p)
-        # Reducing the key bounds
-        a_bounds[p]["q_v"].min[-1, :] = -0.020
-        a_bounds[p]["q_v"].max[-1, :] = 0.01
 
         x_init.add("q_u", qu, phase=p)
-        x_init.add("qdot_u", [0] * (models[0].nb_q - 3), phase=p)
+        x_init.add("qdot_u", [0] * models[0].nb_independent_joints, phase=p)
 
         a_init.add("q_v", qv, phase=p)
 
         x_bounds.add(
             "tau",
-            min_bound=[-40] * (models[0].nb_tau - 1),
-            max_bound=[40] * (models[0].nb_tau - 1),
+            min_bound=[-40] * NB_TAU,
+            max_bound=[40] * NB_TAU,
             phase=p,
         )
-        x_init.add("tau", [0] * (models[0].nb_tau - 1), phase=p)
+        x_init.add("tau", [0] * NB_TAU, phase=p)
 
         u_bounds.add(
-            "taudot", min_bound=[-10000] * (models[0].nb_tau - 1), max_bound=[10000] * (models[0].nb_tau - 1), phase=p
+            "taudot", min_bound=[-taudot_min] * NB_TAU, max_bound=[taudot_max] * NB_TAU, phase=p
         )
 
-        u_init.add("taudot", [0] * (models[0].nb_tau - 1), phase=p)
+        u_init.add("taudot", [0] * NB_TAU, phase=p)
+
+    #  GUIDING THE KEY HEIGHT
+    a_bounds[0]["q_v"].min[-1, :] = 0.0025
+    a_bounds[0]["q_v"].max[-1, :] = -0.0025
+    # Reducing the key bounds
+    # this should go from 0 to -0.01,
+    # but I let a bit of slack to avoid numerical issues
+    a_bounds[1]["q_v"].min[-1, 0] = 0.0025
+    a_bounds[1]["q_v"].max[-1, 0] = -0.0025
+
+    a_bounds[1]["q_v"].min[-1, 1] = -0.020
+    a_bounds[1]["q_v"].max[-1, 1] = 0.01
+
+    a_bounds[1]["q_v"].min[-1, 2] = -0.01025
+    a_bounds[1]["q_v"].max[-1, 2] = -0.00975
+
+    a_bounds[2]["q_v"].min[-1, :] = -0.01025
+    a_bounds[2]["q_v"].max[-1, :] = -0.00975
+
+    a_bounds[3]["q_v"].min[-1, 0] = -0.01025
+    a_bounds[3]["q_v"].max[-1, 0] = -0.00975
+
+    a_bounds[3]["q_v"].min[-1, 1:] = -0.020
+    a_bounds[3]["q_v"].max[-1, 1:] = 0.01
+
+    for p in range(4, 6):
+
+        # mapping that map nothing to make the OCP not crash
+        to_second = [i for i in range(models[-1].nb_q)]
+        to_first = [i for i in range(models[-1].nb_q)]
+        dof_mapping.add(
+            "tau",
+            to_second=to_second,
+            to_first=to_first,
+            phase=p,
+        )
+        dof_mapping.add(
+            "taudot",
+            to_second=to_second,
+            to_first=to_first,
+            phase=p,
+        )
+
+        x_bounds.add("q", bounds=models[p].bounds_from_ranges("q"), phase=p)
+        x_bounds.add("qdot", bounds=models[p].bounds_from_ranges("qdot"), phase=p)
+        x_init.add("q", q[:-1], phase=p)
+        x_init.add("qdot", [0] * (models[p].nb_q), phase=p)
+
+        x_bounds.add(
+            "tau",
+            min_bound=[-40] * NB_TAU,
+            max_bound=[40] * NB_TAU,
+            phase=p,
+        )
+        x_init.add("tau", [0] * NB_TAU, phase=p)
+
+        u_bounds.add(
+            "taudot",
+            min_bound=[-taudot_min] * NB_TAU,
+            max_bound=[taudot_max] * NB_TAU,
+            phase=p,
+        )
+        u_init.add("taudot", [0] * NB_TAU, phase=p)
 
     # Objective Functions
     elbow_wrist_idx = [8, 10]
-    no_elbow_wrist_idx = [i for i in range(12) if i not in elbow_wrist_idx]
+    shoulder_non_flexion_dof = [7, 6]
+    no_elbow_wrist_idx = [i for i in range(first_model.nb_q) if i not in elbow_wrist_idx]
 
     objective_functions.add(
         custom_contraint_lambdas,
@@ -197,8 +279,41 @@ def prepare_ocp(
             weight=0.1,
             custom_qv_init=qv,
         )
+
+    # Trying to help with no speed of joint to garanty no speed of the key
+    # But as side effects
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=0, weight=0.001)
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=2, weight=0.001)
+
+    for p in range(4, 6):
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
+            key="taudot",
+            phase=p,
+            weight=1,
+            index=no_elbow_wrist_idx,
+        )
+
+        # reduce the torque on all joints
+        objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
+
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=p, weight=1, index=shoulder_non_flexion_dof
+        )
+        objective_functions.add(
+            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot", phase=p, weight=0.1,
+                                index=shoulder_non_flexion_dof
+        )
+
+        constraints.add(
+            ConstraintFcn.TRACK_MARKERS,
+            phase=p,
+            node=Node.ALL_SHOOTING,
+            marker_index="contact_finger",
+            min_bound=KEY_TOP_UNPRESSED,
+            max_bound=ELEVATED_FINGER_TIP,
+            index=0  # make sure bound only x direction
+        )
 
     constraints.add(
         custom_func_track_markers,
@@ -269,11 +384,8 @@ def prepare_ocp(
         phase=2,
         node=Node.END,
         marker="contact_finger",
-        # target=np.tile(BED_POSE, (1, n_shootings[1] + 1)),
         target=KEY_TOP_PRESSED,
         custom_qv_init=qv,
-        # min_bound=np.tile(-slack, (1, n_shootings[1] + 1)),
-        # max_bound=np.tile(+slack, (1, n_shootings[1] + 1)),
     )
 
     constraints.add(
@@ -295,85 +407,14 @@ def prepare_ocp(
         custom_qv_init=qv,
     )
 
-    phase_times = [(min_t + max_t) / 2 for min_t, max_t in zip(min_phase_times, max_phase_times)]
 
-    for p in range(4, 6):
-        dynamics.add(
-            DynamicsFcn.TORQUE_DERIVATIVE_DRIVEN,
-            phase=p,
-        )
-
-        # fake mapping to make the OCP not crash
-        dof_mapping.add(
-            "tau",
-            to_second=[i for i in range(models[-1].nb_q)],
-            to_first=[i for i in range(models[-1].nb_q)],
-            phase=p,
-        )
-        dof_mapping.add(
-            "taudot",
-            to_second=[i for i in range(models[-1].nb_q)],
-            to_first=[i for i in range(models[-1].nb_q)],
-            phase=p,
-        )
-
-        x_bounds.add("q", bounds=models[p].bounds_from_ranges("q"), phase=p)
-        x_bounds.add("qdot", bounds=models[p].bounds_from_ranges("qdot"), phase=p)
-        x_init.add("q", q[:-1], phase=p)
-        x_init.add("qdot", [0] * (models[p].nb_q), phase=p)
-
-        x_bounds.add(
-            "tau",
-            min_bound=[-40] * (models[p].nb_tau),
-            max_bound=[40] * (models[p].nb_tau),
-            phase=p,
-        )
-        x_init.add("tau", [0] * (models[p].nb_tau), phase=p)
-
-        u_bounds.add(
-            "taudot",
-            min_bound=[-10000] * (models[p].nb_tau),
-            max_bound=[10000] * (models[p].nb_tau),
-            phase=p,
-        )
-        u_init.add("taudot", [0] * (models[p].nb_tau), phase=p)
 
     phase_transitions.add(
         custom_phase_transition_algebraic_post,
         phase_pre_idx=3,
     )
 
-    # extra objectives
-    for p in range(4, 6):
-        objective_functions.add(
-            ObjectiveFcn.Lagrange.MINIMIZE_CONTROL,
-            key="taudot",
-            phase=p,
-            weight=1,
-            index=no_elbow_wrist_idx,
-        )
 
-        # reduce the torque on all joints
-        objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="tau", phase=p, weight=0.1)
-
-        shoulder_non_flexion_dof = [7, 6]
-        objective_functions.add(
-            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="q", phase=p, weight=1, index=shoulder_non_flexion_dof
-        )
-        objective_functions.add(
-            ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot", phase=p, weight=0.1,
-                                index=shoulder_non_flexion_dof
-        )
-
-        constraints.add(
-            ConstraintFcn.TRACK_MARKERS,
-            phase=p,
-            node=Node.ALL_SHOOTING,
-            marker_index="contact_finger",
-            min_bound=KEY_TOP_UNPRESSED,
-            max_bound=ELEVATED_FINGER_TIP,
-            index=0  # make sure bound only x direction
-        )
 
     constraints.add(
         ConstraintFcn.TRACK_MARKERS,
@@ -403,13 +444,12 @@ def prepare_ocp(
         nodes=(Node.END, Node.START),
     )
 
-
     # Prepare the optimal control program
     ocp = OptimalControlProgram(
         bio_model=models,
         dynamics=dynamics,
         n_shooting=n_shootings,
-        phase_time=phase_times,
+        phase_time=[(min_t + max_t) / 2 for min_t, max_t in zip(min_phase_times, max_phase_times)],
         x_bounds=x_bounds,
         u_bounds=u_bounds,
         a_bounds=a_bounds,
