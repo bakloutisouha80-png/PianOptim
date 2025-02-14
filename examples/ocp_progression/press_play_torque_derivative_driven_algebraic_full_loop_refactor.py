@@ -40,6 +40,7 @@ from pianoptim.utils.custom_functions import (
     custom_func_track_markers,
     custom_func_track_markers_velocity,
     custom_contraint_lambdas,
+    minimize_qdot_v_intermediates,
 )
 from pianoptim.utils.custom_transitions import (custom_phase_transition_algebraic_post,
                                                 custom_phase_transition_algebraic_pre,
@@ -273,16 +274,6 @@ def prepare_ocp(
     # Objective Functions
     no_elbow_wrist_idx = [i for i in range(NB_TAU) if i not in ELBOW_WRIST_IDX]
 
-    # TODO: make sure the penalties on forces are ok
-    objective_functions.add(
-        custom_contraint_lambdas,
-        custom_type=ObjectiveFcn.Lagrange,
-        index=[0, 2],  # only the x mediolat and z translation of the key are penalized
-        phase=0,
-        weight=0.1,
-        custom_qv_init=qv,
-        quadratic=True,
-    )
     for p in HOLONOMIC_PHASES:
         # reduce the torque variation on all joints except elbow and wrist
         objective_functions.add(
@@ -299,8 +290,8 @@ def prepare_ocp(
         objective_functions.add(
             custom_contraint_lambdas,
             custom_type=ObjectiveFcn.Lagrange,
-            # todo: is it the right index? i believe I should have put the index of the mediolateral axis 0
-            index=[2], # only the z-translation of the key is penalized
+            # NOTE: I wanted to minimize only mediolateral forces (id=0) but it's not converging
+            index=[0, 2],
             phase=p,
             weight=0.1,
             custom_qv_init=qv,
@@ -314,8 +305,9 @@ def prepare_ocp(
     objective_functions.add(ObjectiveFcn.Lagrange.MINIMIZE_STATE, key="qdot_u", phase=2, weight=0.001)
 
     # todo: uncomment to try after a convergence / to replace the previous objectives
+    # I can't make it work rn :/
     # objective_functions.add(
-    #     minimize_qdot_v,
+    #     minimize_qdot_v_intermediates,
     #     custom_type=ObjectiveFcn.Mayer,
     #     phase=0,
     #     weight=1,
@@ -323,7 +315,7 @@ def prepare_ocp(
     #     dof_idx=[2],  # only the z-translation of the key is penalized
     # )
     # objective_functions.add(
-    #     minimize_qdot_v,
+    #     minimize_qdot_v_intermediates,
     #     custom_type=ObjectiveFcn.Mayer,
     #     phase=2,
     #     weight=1,
@@ -458,6 +450,17 @@ def prepare_ocp(
         custom_qv_init=qv,
     )
 
+    # TASK CONSTRAINT: FELIPE
+    # The finger as to move forward in the -y direction and +z direction after the key is released
+    constraints.add(
+        ConstraintFcn.TRACK_MARKERS_VELOCITY,
+        phase=4,
+        node=Node.START,
+        marker_index="contact_finger",
+        min_bound=[-0.01, -20, 0],
+        max_bound=[0.01, 0, 20],
+    )
+
     constraints.add(
         ConstraintFcn.TRACK_MARKERS,
         phase=4,
@@ -474,10 +477,16 @@ def prepare_ocp(
         target=KEY_TOP_UNPRESSED,
     )
 
-    # The first and last frames are at rest
-    x_bounds[0]["qdot_u"][:, 0] = 0
-    x_bounds[-1]["qdot"].min[:, -1] = -0.1
-    x_bounds[-1]["qdot"].max[:, -1] = 0.1
+    # NOTE: IT CONVERGED WITHOUT THE THIGHT BOUNDS BUT IT TOOKED 14H.
+    # try to remove the bounds on the first and last frames
+    # x_bounds[0]["qdot_u"][:, 0] = 0
+    # x_bounds[-1]["qdot"].min[:, -1] = -0.1
+    # x_bounds[-1]["qdot"].max[:, -1] = 0.1
+
+    x_bounds[0]["qdot_u"].min[:, -1] = -10
+    x_bounds[0]["qdot_u"].max[:, -1] = 10
+    x_bounds[-1]["qdot"].min[:, -1] = -10
+    x_bounds[-1]["qdot"].max[:, -1] = 10
 
     #  TRANSITIONS
     phase_transitions.add(

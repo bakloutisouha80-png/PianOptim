@@ -194,9 +194,9 @@ def minimize_qdot_v_intermediates(
     q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
     qdot_v = controllers.model.compute_qdot_v()(q, qdot_u_complete)[dof_idx]
 
-    for q_u_cx, q_v_cx in zip(q_u.cx_intermediates_list, q_v.cx_intermediates_list):
+    for q_u_cx, q_v_cx, qdot_u_cx in zip(q_u.cx_intermediates_list, q_v.cx_intermediates_list, qdot_u.cx_intermediates_list):
         q_u_complete = q_u.mapping.to_second.map(q_u_cx)
-        qdot_u_complete = qdot_u.mapping.to_second.map(qdot_u.cx_intermediates_list)
+        qdot_u_complete = qdot_u.mapping.to_second.map(qdot_u_cx)
         q_v_complete = q_v.mapping.to_second.map(q_v_cx)
         q = controllers.model.state_from_partition(q_u_complete, q_v_complete)
         qdot_v = vertcat(qdot_v, controllers.model.compute_qdot_v()(q, qdot_u_complete)[dof_idx])
