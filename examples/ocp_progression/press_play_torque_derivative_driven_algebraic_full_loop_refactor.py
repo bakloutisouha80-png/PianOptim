@@ -452,6 +452,7 @@ def prepare_ocp(
 
     # TASK CONSTRAINT: FELIPE
     # The finger as to move forward in the -y direction and +z direction after the key is released
+    # TODO: A RAFFINER METTRE LA VITESSE DE LA MAIN POSITIVE VERS L'AVANT DURANT L'ENFONCEMENT.
     constraints.add(
         ConstraintFcn.TRACK_MARKERS_VELOCITY,
         phase=4,
