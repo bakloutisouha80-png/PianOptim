@@ -45,11 +45,33 @@ There are two ways to model this:
 - This may cause (and probably is causing) problems when inverting the matrix when computing the dynamics (reason why forced to use COLLOCATION?)
 - Is this even relevent to keep fingers for the question we are trying to answer?
 
-
-
 # Discussion
 Comparer simulation tronc VS simulation tronc fixe
 Quel est le mécanisme utilisé quand on a beaucoup de DoF
   - Plutôt postural
   - Dépendance de la fonction objectif
   - Quelles sont les coordinations qui permettent une utilisation efficace du tronc
+
+### TODOs:
+11/04/2025
+**follow through**
+- Avec la main plutot que le bout du doigts
+- Poulen de doigts plutot part en avant (s'éloigne du joueur) a la fin de la pression sur la touche plutot qu'en arriere
+  - mettre une condition que le centre de masse de la main avance pendant la descente, puis main + bras, puis main + bras + thorax
+  - Faire l'analyse des resultats la dessus
+
+**link stomach and pelvis** 
+Motion to be in the same direction. q sign should always be the same
+
+**Fonction de cout** 
+Taudot pas minimser pour le coude poignet et epaule (a faire pour epaule) !
+
+**Pelvis torques**
+- Opposite torque from leg weight.
+    - 0.8 * 0.15 * 70 * 9.81 = 82.404 Nm estimation couple max du pelvis (rotation arriere), provient de l'appui des pieds
+    - 0.8 BW force from sit to stand motion https://doi.org/10.1016/j.archger.2007.10.006
+- Forward torque from leg weight and inertia
+
+**Contact**
+- spring-damper for the key, integrer les resultats identifier sur le ressort (regression polynomial et exponentielle)
+- Friction cone for the finger to prevent sliding (as in somersault simulations)
