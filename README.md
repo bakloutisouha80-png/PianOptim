@@ -52,8 +52,9 @@ Quel est le mécanisme utilisé quand on a beaucoup de DoF
   - Dépendance de la fonction objectif
   - Quelles sont les coordinations qui permettent une utilisation efficace du tronc
 
-### TODOs:
+### TODO
 11/04/2025
+
 **follow through**
 - Avec la main plutot que le bout du doigts
 - Poulen de doigts plutot part en avant (s'éloigne du joueur) a la fin de la pression sur la touche plutot qu'en arriere
