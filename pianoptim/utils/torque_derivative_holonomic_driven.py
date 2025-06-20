@@ -301,6 +301,56 @@ def holonomic_torque_derivative_driven_with_qv(
     return DynamicsEvaluation(dxdt=vertcat(qdot_u, qddot_u, taudot), defects=None)
 
 
+def holonomic_torque_derivative_driven_with_qv_spring(
+    time,
+    states,
+    controls,
+    parameters,
+    algebraic_states,
+    numerical_timeseries,
+    nlp,
+) -> DynamicsEvaluation:
+    """
+    The custom dynamics function that provides the derivative of the states: dxdt = f(t, x, u, p, a, d)
+
+    Parameters
+    ----------
+    time: MX.sym | SX.sym
+        The time of the system
+    states: MX.sym | SX.sym
+        The state of the system
+    controls: MX.sym | SX.sym
+        The controls of the system
+    parameters: MX.sym | SX.sym
+        The parameters acting on the system
+    algebraic_states: MX.sym | SX.sym
+        The algebraic states of the system
+    numerical_timeseries: MX.sym | SX.sym
+        The numerical timeseries of the system
+    nlp: NonLinearProgram
+        A reference to the phase
+
+    Returns
+    -------
+    The derivative of the states in the tuple[MX | SX] format
+    """
+
+    q_v = DynamicsFunctions.get(nlp.algebraic_states["q_v"], algebraic_states)
+    q_u = DynamicsFunctions.get(nlp.states["q_u"], states)
+    qdot_u = DynamicsFunctions.get(nlp.states["qdot_u"], states)
+    tau = DynamicsFunctions.get(nlp.states["tau"], states)
+
+    q = nlp.model.state_from_partition(q_u, q_v)
+
+    tau_spring = nlp.model.compute_spring_force(q)
+    tau[-1] += tau_spring
+
+    taudot = controls
+    qddot_u = nlp.model.partitioned_forward_dynamics_with_qv()(q_u, q_v, qdot_u, tau)
+
+    return DynamicsEvaluation(dxdt=vertcat(qdot_u, qddot_u, taudot), defects=None)
+
+
 def constraint_holonomic_end(
     controllers: PenaltyController,
 ):

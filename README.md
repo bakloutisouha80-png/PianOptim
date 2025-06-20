@@ -55,6 +55,10 @@ Quel est le mécanisme utilisé quand on a beaucoup de DoF
 ### TODO
 11/04/2025
 
+**Friction**
+
+If we want more https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00041/full
+
 **follow through**
 - Avec la main plutot que le bout du doigts
 - Poulen de doigts plutot part en avant (s'éloigne du joueur) a la fin de la pression sur la touche plutot qu'en arriere
