@@ -195,7 +195,7 @@ def main():
     min_phase_time = (0.05, 0.01, 0.05, 0.01, 0.05)
     max_phase_time = (0.10, 0.05, 0.05, 0.05, 0.10)
     zero_position = ZeroPosition.MARKER
-    ode_solver = OdeSolver.RK4(n_integration_steps=5)
+    ode_solver = [OdeSolver.RK4(n_integration_steps=5)]
 
     ocp = prepare_ocp(
         model_path=model_path,
@@ -213,7 +213,7 @@ def main():
         online_optim=OnlineOptim.DEFAULT,
         show_options={"show_bounds": True, "automatically_organize": False},
     )
-    solv.set_maximum_iterations(0)  # TODO This should not be necessary
+    # solv.set_maximum_iterations(0)  # TODO This should not be necessary
     # solv.set_linear_solver("ma57")
 
     sol = ocp.solve(solv)

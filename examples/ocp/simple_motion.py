@@ -150,7 +150,7 @@ def main():
     min_phase_time = (0.05,)
     max_phase_time = (0.10,)
     zero_position = ZeroPosition.MARKER
-    ode_solver = OdeSolver.RK2(n_integration_steps=5)
+    ode_solver = [OdeSolver.RK2(n_integration_steps=5)]
 
     ocp = prepare_ocp(
         model_path=model_path,

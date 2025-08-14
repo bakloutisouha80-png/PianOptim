@@ -284,7 +284,7 @@ def main():
     max_phase_time = (0.05, 0.055, 0.06)
     # ode_solver = OdeSolver.RK2(n_integration_steps=5)
     # ode_solver = OdeSolver.RK4(n_integration_steps=5)
-    ode_solver = OdeSolver.COLLOCATION(polynomial_degree=3)
+    ode_solver = [OdeSolver.COLLOCATION(polynomial_degree=3)]
     #
     ocp, qv = prepare_ocp(
         model_path=model_path,
